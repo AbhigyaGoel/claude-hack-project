@@ -67,7 +67,7 @@ With an 800ms minimum duration filter to reject noise.
 
 **Database schema churn.** We started with a rough schema and kept evolving it as features landed (sessions, SOAP fields, narrator logs, patient memory). Each shift meant migrations, RLS policies, and fixing queries that assumed yesterday's columns. The app and DB were in constant negotiation.
 
-**Version control and keys (classic hackathon).** Divergent branches, stash-and-rebase loops, and "works on my machine" moments were part of the weekend. On top of that, we had to keep Anthropic, ElevenLabs, and Supabase credentials consistent across `.env`, deployment, and teammates' machines so nothing silently failed in demo.
+**Version control and keys (classic hackathon).** Divergent branches, stash-and-rebase loops, and "works on my machine" moments were part of the day. On top of that, we had to keep Anthropic, ElevenLabs, and Supabase credentials consistent across `.env`, deployment, and teammates' machines so nothing silently failed in demo.
 
 ## Accomplishments that we're proud of
 
