@@ -258,17 +258,11 @@ export default function ReportPage() {
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4">
-        <div className="relative w-20 h-20">
-          <div className="spinner w-full h-full" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
-              <rect x="9" y="3" width="6" height="4" rx="1" />
-              <path d="M9 12h6M9 16h4" />
-            </svg>
-          </div>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-4">
+        {/* Spinner lives on its own row, above everything else — clipboard
+            icon removed so the ring reads clearly as a loading indicator. */}
+        <div className="spinner" style={{ width: "72px", height: "72px" }} />
+
         <div className="text-center max-w-xs">
           <p
             key={msgIdx}
@@ -281,6 +275,7 @@ export default function ReportPage() {
             Usually takes 15–20 seconds
           </p>
         </div>
+
         <div className="flex gap-1.5">
           {LOADING_MESSAGES.map((_, i) => (
             <div
