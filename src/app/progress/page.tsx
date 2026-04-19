@@ -51,6 +51,7 @@ export default function ProgressPage() {
   // focus via `summary.focus`.
   const [activeFocus, setActiveFocus] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showAllSessions, setShowAllSessions] = useState(false);
 
   async function handleDelete(id: string, e: React.MouseEvent) {
     // Stop the click from navigating to the session's report.
@@ -330,7 +331,11 @@ export default function ProgressPage() {
               Session History
             </h3>
             <div className="flex flex-col gap-2">
-              {[...filteredSessions].reverse().map((s) => {
+              {(() => {
+                const ordered = [...filteredSessions].reverse();
+                const visible = showAllSessions ? ordered : ordered.slice(0, 5);
+                return visible;
+              })().map((s) => {
                 const focus = focusForSession(s);
                 const isDeleting = deletingId === s.id;
                 return (
@@ -404,6 +409,24 @@ export default function ProgressPage() {
                 );
               })}
             </div>
+            {filteredSessions.length > 5 && (
+              <div className="flex justify-center mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAllSessions((v) => !v)}
+                  className="text-xs px-3 py-1.5 rounded-full"
+                  style={{
+                    background: "var(--color-surface-raised)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  {showAllSessions
+                    ? "Show recent 5"
+                    : `Show all ${filteredSessions.length} sessions`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
