@@ -78,6 +78,13 @@ export default function SessionPage() {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [movementPhase, setMovementPhase] = useState<MovementPhase>("ready");
 
+  // Agent state
+  const [narratorEntries, setNarratorEntries] = useState<{ id: string; text: string }[]>([]);
+  const [safetyHalt, setSafetyHalt] = useState<string | null>(null);
+  const [formCriticFaults, setFormCriticFaults] = useState<string[]>([]);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastVisionTimeRef = useRef(0);
+
   // Tracking refs
   const sessionStartRef = useRef<number>(0);
   const repQualitiesRef = useRef<RepQuality[][]>([[]]);
@@ -90,6 +97,112 @@ export default function SessionPage() {
   const repStartTimeRef = useRef(0);
 
   const currentExercise = plan?.exercises[currentExerciseIndex];
+
+  // --- Agent calls (non-blocking, fire-and-forget during exercise) ---
+
+  /** Form Critic: analyze rep quality via Claude after each completed rep */
+  const callFormCritic = useCallback(async (exercise: ExercisePlanItem, peakAngle: number, repNum: number) => {
+    try {
+      const res = await fetch("/api/form-critic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exercise: { id: exercise.id, name: exercise.name, target_angles: exercise.target_angles, tolerances: exercise.tolerances, compensation_patterns: exercise.compensation_patterns },
+          rep_data: { peak_angle: peakAngle, rep_number: repNum },
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.faults?.length > 0) {
+        setFormCriticFaults(data.faults.map((f: { description?: string; type?: string }) => f.description || f.type || ""));
+      } else {
+        setFormCriticFaults([]);
+      }
+    } catch { /* non-blocking */ }
+  }, []);
+
+  /** Safety Monitor: check for red flags via Haiku — runs on vision frames */
+  const callSafetyMonitor = useCallback(async (frameBase64?: string) => {
+    try {
+      const res = await fetch("/api/safety-monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: `session_${sessionStartRef.current}`,
+          frame_base64: frameBase64,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.halt) {
+        setSafetyHalt(data.red_flag_type || "Red flag detected");
+        setStep("summary");
+      }
+    } catch { /* non-blocking */ }
+  }, []);
+
+  /** Clinical Narrator: stream reasoning to side panel after each rep */
+  const callNarrator = useCallback(async (exercise: ExercisePlanItem, repNum: number, quality: string, peakAngle: number) => {
+    if (!activeProfile) return;
+    try {
+      const res = await fetch("/api/narrator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: `session_${sessionStartRef.current}`,
+          patient_id: activeProfile.id,
+          current_exercise: exercise.name,
+          rep_data: { rep_number: repNum, peak_angle: peakAngle, quality },
+        }),
+      });
+      if (!res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      const entryId = `nar_${Date.now()}`;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const chunk = JSON.parse(line.slice(6));
+            if (chunk.content) {
+              setNarratorEntries(prev => {
+                const existing = prev.find(e => e.id === entryId);
+                if (existing) {
+                  return prev.map(e => e.id === entryId ? { ...e, text: e.text + chunk.content } : e);
+                }
+                return [...prev.slice(-4), { id: entryId, text: chunk.content }];
+              });
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch { /* non-blocking */ }
+  }, [activeProfile]);
+
+  /** Vision sampling: capture frame at 1fps for safety monitor */
+  const sendVisionFrame = useCallback(async () => {
+    if (!videoRef.current) return;
+    const now = Date.now();
+    if (now - lastVisionTimeRef.current < 3000) return; // every 3s
+    lastVisionTimeRef.current = now;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(videoRef.current, 0, 0, 320, 240);
+      const base64 = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
+      callSafetyMonitor(base64);
+    } catch { /* non-blocking */ }
+  }, [callSafetyMonitor]);
 
   // Check for existing active patient on mount.
   useEffect(() => {
@@ -205,6 +318,11 @@ export default function SessionPage() {
       peakAnglesRef.current[currentExerciseIndex][key] = Math.max(prev, peakAngleRef.current);
     }
 
+    // Fire agents (non-blocking)
+    const savedPeak = peakAngleRef.current;
+    callFormCritic(currentExercise, savedPeak, newRep);
+    callNarrator(currentExercise, newRep, quality, savedPeak);
+
     // Reset
     peakAngleRef.current = 0;
     repPhaseRef.current = "idle";
@@ -233,6 +351,9 @@ export default function SessionPage() {
   const handleLandmarks = useCallback(
     (_landmarks: Landmark[], angles: Record<string, number>) => {
       if (!currentExercise) return;
+
+      // Run safety monitor on vision frames (every 3s, non-blocking)
+      sendVisionFrame();
 
       const side = diagnostic?.side === "right" ? "right" : "left";
       const primaryJoint = currentExercise.target_angles
@@ -552,13 +673,30 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Exercise — 2-panel layout */}
+      {/* Exercise — 3-panel layout */}
       {step === "exercising" && currentExercise && (
         <div className="flex-1 flex gap-4 min-h-0 animate-fade-in">
+          {/* Clinical Narrator (left) */}
+          <aside className="w-64 flex flex-col gap-2 overflow-y-auto glass-card p-3 shrink-0">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--color-accent)" }} />
+              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Reasoning</span>
+            </div>
+            {narratorEntries.length === 0 ? (
+              <p className="text-xs italic" style={{ color: "var(--color-text-muted)" }}>Clinical reasoning will stream here as you exercise...</p>
+            ) : (
+              narratorEntries.map((entry) => (
+                <div key={entry.id} className="text-xs leading-relaxed p-2 rounded-lg" style={{ background: "var(--color-surface-raised)", color: "var(--color-text-secondary)" }}>
+                  {entry.text}
+                </div>
+              ))
+            )}
+          </aside>
+
           {/* Webcam (center) */}
           <div className="flex-1 min-h-0">
             <Suspense fallback={<WebcamLoading />}>
-              <WebcamView showAngles onLandmarksDetected={handleLandmarks} />
+              <WebcamView showAngles onLandmarksDetected={handleLandmarks} onVideoReady={(v) => { videoRef.current = v; }} />
             </Suspense>
           </div>
 
@@ -586,6 +724,15 @@ export default function SessionPage() {
             >
               Skip Exercise →
             </button>
+            {/* Form Critic feedback */}
+            {formCriticFaults.length > 0 && (
+              <div className="glass-card p-3" style={{ borderColor: "#eab308" }}>
+                <div className="text-xs font-medium mb-1" style={{ color: "#eab308" }}>Form Analysis</div>
+                {formCriticFaults.map((f, i) => (
+                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
+                ))}
+              </div>
+            )}
           </aside>
         </div>
       )}
