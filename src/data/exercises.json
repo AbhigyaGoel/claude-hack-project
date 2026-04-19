@@ -1,0 +1,456 @@
+[
+  {
+    "id": "wall_slide_01",
+    "name": "Wall Slide",
+    "body_region": "shoulder",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["wall"],
+    "target_muscles": ["lower_trapezius", "serratus_anterior"],
+    "primary_joint_angle": "shoulder_flexion_degrees",
+    "target_angles": {
+      "shoulder_flexion_degrees": 150,
+      "elbow_extension_degrees": 170
+    },
+    "tolerances": {
+      "shoulder_flexion_degrees": 10,
+      "elbow_extension_degrees": 10
+    },
+    "tempo_seconds": "3-1-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Squeeze shoulder blades down and back",
+      "Slide pinky side of hand up the wall",
+      "Keep ribs down — don't arch your back"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "scapular_elevation",
+        "detection": "shoulder landmark y decreases relative to ear landmark y by >2cm during flexion",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_extension",
+        "detection": "hip landmark moves anterior >3cm during overhead reach",
+        "landmarks": [23, 11],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_rotator_cuff_tear", "shoulder_dislocation_recent"],
+    "regression": "Reduce ROM to pain-free range",
+    "progression": "Add 1lb wrist weight"
+  },
+  {
+    "id": "shoulder_flexion_supine_01",
+    "name": "Supine Shoulder Flexion",
+    "body_region": "shoulder",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["anterior_deltoid", "upper_trapezius"],
+    "primary_joint_angle": "shoulder_flexion_degrees",
+    "target_angles": {
+      "shoulder_flexion_degrees": 170,
+      "elbow_extension_degrees": 175
+    },
+    "tolerances": {
+      "shoulder_flexion_degrees": 15,
+      "elbow_extension_degrees": 10
+    },
+    "tempo_seconds": "4-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Keep your elbow straight",
+      "Lift arm overhead slowly, as far as comfortable",
+      "Lower with control — don't let gravity do the work"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "elbow_bend",
+        "detection": "elbow flexion exceeds 20 degrees during movement",
+        "landmarks": [11, 13, 15],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["frozen_shoulder_acute"],
+    "regression": "Use opposite hand to assist the movement",
+    "progression": "Hold 1-2lb weight"
+  },
+  {
+    "id": "pendulum_01",
+    "name": "Pendulum Exercise",
+    "body_region": "shoulder",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["table"],
+    "target_muscles": ["rotator_cuff", "deltoid"],
+    "primary_joint_angle": "shoulder_flexion_degrees",
+    "target_angles": {
+      "shoulder_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_flexion_degrees": 30
+    },
+    "tempo_seconds": "2-0-2-0",
+    "default_sets": 2,
+    "default_reps": 15,
+    "cues": [
+      "Lean forward and let your arm hang",
+      "Make small circles with your hand",
+      "Let gravity and momentum do the work — stay relaxed"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "active_muscle_contraction",
+        "detection": "shoulder elevation detected during swing",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Smaller circles",
+    "progression": "Hold a light weight (1-2lb)"
+  },
+  {
+    "id": "external_rotation_sidelying_01",
+    "name": "Sidelying External Rotation",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat", "light_dumbbell"],
+    "target_muscles": ["infraspinatus", "teres_minor"],
+    "primary_joint_angle": "shoulder_external_rotation_degrees",
+    "target_angles": {
+      "shoulder_external_rotation_degrees": 70,
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_external_rotation_degrees": 10,
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Keep elbow pinned to your side",
+      "Rotate forearm toward ceiling",
+      "Control the lowering — don't let the weight drop"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "elbow_drift",
+        "detection": "elbow moves away from torso during rotation",
+        "landmarks": [13, 11, 23],
+        "severity": "yellow"
+      },
+      {
+        "name": "trunk_rotation",
+        "detection": "trunk rotates backward during external rotation",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_rotator_cuff_tear"],
+    "regression": "No weight, gravity-eliminated position",
+    "progression": "Increase weight by 1lb"
+  },
+  {
+    "id": "scapular_retraction_01",
+    "name": "Scapular Retraction",
+    "body_region": "shoulder",
+    "category": "stabilization",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["rhomboids", "middle_trapezius"],
+    "primary_joint_angle": "shoulder_extension_degrees",
+    "target_angles": {
+      "shoulder_extension_degrees": 20
+    },
+    "tolerances": {
+      "shoulder_extension_degrees": 10
+    },
+    "tempo_seconds": "2-3-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Squeeze shoulder blades together",
+      "Hold the squeeze for 3 seconds",
+      "Don't shrug your shoulders — keep them down"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "scapular_elevation",
+        "detection": "shoulders rise toward ears during retraction",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Seated position",
+    "progression": "Add resistance band"
+  },
+  {
+    "id": "shoulder_abduction_standing_01",
+    "name": "Standing Shoulder Abduction",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["light_dumbbell"],
+    "target_muscles": ["middle_deltoid", "supraspinatus"],
+    "primary_joint_angle": "shoulder_abduction_degrees",
+    "target_angles": {
+      "shoulder_abduction_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_abduction_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lift arm out to the side, thumb pointing up",
+      "Stop at shoulder height",
+      "Lower slowly with control"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "scapular_hiking",
+        "detection": "shoulder elevates toward ear during abduction",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      },
+      {
+        "name": "trunk_lateral_lean",
+        "detection": "trunk leans away from lifting arm",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["impingement_acute", "rotator_cuff_tear_full"],
+    "regression": "Reduce ROM to 60 degrees",
+    "progression": "Increase weight by 1lb"
+  },
+  {
+    "id": "prone_y_raise_01",
+    "name": "Prone Y-Raise",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["lower_trapezius", "serratus_anterior"],
+    "primary_joint_angle": "shoulder_flexion_degrees",
+    "target_angles": {
+      "shoulder_flexion_degrees": 140
+    },
+    "tolerances": {
+      "shoulder_flexion_degrees": 15
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Lift arms into a Y shape overhead",
+      "Squeeze shoulder blades together and down",
+      "Keep thumbs pointing to ceiling"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "scapular_elevation",
+        "detection": "shoulders shrug toward ears during lift",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_hyperextension",
+        "detection": "excessive low back arch during arm lift",
+        "landmarks": [23, 11],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_low_back_pain"],
+    "regression": "Arms closer to body (T-raise position)",
+    "progression": "Hold light weights (1-2lb)"
+  },
+  {
+    "id": "internal_rotation_band_01",
+    "name": "Internal Rotation with Band",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band", "door_anchor"],
+    "target_muscles": ["subscapularis", "pectoralis_major"],
+    "primary_joint_angle": "shoulder_internal_rotation_degrees",
+    "target_angles": {
+      "shoulder_internal_rotation_degrees": 70,
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_internal_rotation_degrees": 10,
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Keep elbow glued to your side",
+      "Pull band across your body",
+      "Return slowly — don't let the band snap back"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "elbow_drift",
+        "detection": "elbow moves away from torso",
+        "landmarks": [13, 11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["subscapularis_tear"],
+    "regression": "Lighter resistance band",
+    "progression": "Heavier resistance band"
+  },
+  {
+    "id": "cross_body_stretch_01",
+    "name": "Cross-Body Shoulder Stretch",
+    "body_region": "shoulder",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["posterior_deltoid", "infraspinatus"],
+    "primary_joint_angle": "shoulder_horizontal_adduction_degrees",
+    "target_angles": {
+      "shoulder_horizontal_adduction_degrees": 120
+    },
+    "tolerances": {
+      "shoulder_horizontal_adduction_degrees": 15
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Pull arm across body with opposite hand",
+      "Hold for 30 seconds",
+      "You should feel a stretch in the back of your shoulder"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_rotation",
+        "detection": "body rotates toward the stretch",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["labral_tear_acute"],
+    "regression": "Gentle pull, shorter hold",
+    "progression": "Longer hold (45 seconds)"
+  },
+  {
+    "id": "doorway_pec_stretch_01",
+    "name": "Doorway Pec Stretch",
+    "body_region": "shoulder",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["doorway"],
+    "target_muscles": ["pectoralis_major", "pectoralis_minor", "anterior_deltoid"],
+    "primary_joint_angle": "shoulder_horizontal_abduction_degrees",
+    "target_angles": {
+      "shoulder_horizontal_abduction_degrees": 90,
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_horizontal_abduction_degrees": 10,
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Place forearm on doorframe at shoulder height",
+      "Step forward until you feel a stretch across your chest",
+      "Keep your shoulder blade back — don't let it round forward"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "scapular_protraction",
+        "detection": "shoulder blade rounds forward during stretch",
+        "landmarks": [11, 12],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["anterior_shoulder_instability"],
+    "regression": "Elbow below shoulder height",
+    "progression": "Elbow above shoulder height"
+  },
+  {
+    "id": "isometric_external_rotation_01",
+    "name": "Isometric External Rotation",
+    "body_region": "shoulder",
+    "category": "stabilization",
+    "difficulty_tier": 1,
+    "equipment": ["wall"],
+    "target_muscles": ["infraspinatus", "teres_minor"],
+    "primary_joint_angle": "elbow_flexion_degrees",
+    "target_angles": {
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "0-10-0-5",
+    "default_sets": 3,
+    "default_reps": 5,
+    "cues": [
+      "Stand with elbow bent 90 degrees at your side",
+      "Press the back of your hand into the wall",
+      "Hold for 10 seconds at 50% effort"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "elbow_drift",
+        "detection": "elbow moves away from torso during hold",
+        "landmarks": [13, 11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Reduce hold time to 5 seconds",
+    "progression": "Increase to 75% effort"
+  },
+  {
+    "id": "shoulder_shrug_01",
+    "name": "Shoulder Shrugs",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["upper_trapezius", "levator_scapulae"],
+    "primary_joint_angle": "shoulder_elevation_degrees",
+    "target_angles": {
+      "shoulder_elevation_degrees": 30
+    },
+    "tolerances": {
+      "shoulder_elevation_degrees": 10
+    },
+    "tempo_seconds": "2-2-2-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Lift shoulders straight up toward ears",
+      "Squeeze at the top for 2 seconds",
+      "Lower slowly and completely"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "neck_forward_lean",
+        "detection": "head moves forward during shrug",
+        "landmarks": [0, 11, 12],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_radiculopathy_acute"],
+    "regression": "Smaller range of motion",
+    "progression": "Hold light dumbbells"
+  }
+]
