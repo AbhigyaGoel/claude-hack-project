@@ -1,11 +1,9 @@
 import { NextRequest } from "next/server";
-import { callClaudeSimple, callClaudeVision, streamClaude } from "@/lib/claude/client";
-import {
-  FORM_CRITIC_SYSTEM,
-  SAFETY_MONITOR_SYSTEM,
-  NARRATOR_SYSTEM,
-  CUE_GENERATOR_SYSTEM,
-} from "@/lib/claude/prompts";
+import { streamClaude } from "@/lib/claude/client";
+import { FORM_CRITIC_SYSTEM, NARRATOR_SYSTEM } from "@/lib/claude/prompts";
+import { generateCue } from "@/agents/cueGenerator";
+import { analyzeRep, DEFAULT_REP_ANALYSIS } from "@/agents/formCritic";
+import { checkSafety } from "@/agents/safetyMonitor";
 import { loadPatientContext } from "@/lib/claude/memory";
 import { queryExercises } from "@/lib/exercises";
 import { getTools } from "@/lib/claude/tools";
@@ -24,18 +22,6 @@ interface SSEEvent {
 
 function formatSSE(event: SSEEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
-}
-
-function parseJSON<T>(raw: string, fallback: T): T {
-  const cleaned = raw
-    .replace(/```json\s*/g, "")
-    .replace(/```/g, "")
-    .trim();
-  try {
-    return JSON.parse(cleaned) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 /**
@@ -217,21 +203,9 @@ async function handleEvaluateRep(
     `\n\nTool Definitions:\n${toolDefsJson}`,
   ];
 
-  const formCriticPrompt = JSON.stringify({
-    exercise_name: exercise.name,
-    exercise_id: exercise.id,
-    target_angles: exercise.target_angles ?? {},
-    tolerances: exercise.tolerances ?? {},
-    compensation_patterns: exercise.compensation_patterns ?? [],
-    rep_data,
-    keypoints_timeseries: keypoints_timeseries ?? [],
-  });
-
-  const safetyPrompt = JSON.stringify({
-    session_id: sessionId,
-    keypoints: keypoints_timeseries ? keypoints_timeseries[keypoints_timeseries.length - 1] : null,
-    timestamp: new Date().toISOString(),
-  });
+  const lastKeypoint = keypoints_timeseries
+    ? keypoints_timeseries[keypoints_timeseries.length - 1]
+    : null;
 
   const readableStream = new ReadableStream({
     async start(controller) {
@@ -243,8 +217,18 @@ async function handleEvaluateRep(
 
         // Spawn form-critic and safety-monitor in parallel
         const [formResult, safetyResult] = await Promise.all([
-          runFormCritic(formCriticPrompt, frame_base64, formCriticSystemParts),
-          runSafetyMonitor(safetyPrompt, frame_base64),
+          analyzeRep({
+            exercise,
+            rep_data,
+            keypoints_timeseries,
+            frame_base64,
+            systemParts: formCriticSystemParts,
+          }).catch(() => DEFAULT_REP_ANALYSIS),
+          checkSafety({
+            session_id: sessionId,
+            keypoints: lastKeypoint,
+            frame_base64,
+          }),
         ]);
 
         // Check safety first — if halt, stop immediately
@@ -302,7 +286,12 @@ async function handleEvaluateRep(
         // Generate cue if faults detected or quality is low
         const needsCue = formResult.quality < 0.8 || (formResult.faults && formResult.faults.length > 0);
         if (needsCue) {
-          const cue = await runCueGenerator(formResult, rep_number, set_number, exercise.name);
+          const cue = await generateCue({
+            assessment: formResult,
+            rep_number,
+            set_number,
+            exercise_name: exercise.name,
+          });
           controller.enqueue(encoder.encode(formatSSE({
             type: "cue",
             data: cue,
@@ -391,104 +380,4 @@ async function handleEvaluateRep(
 
 // --- Agent runners ---
 
-async function runFormCritic(prompt: string, frameBase64?: string, systemParts?: string[]) {
-  const defaultResult = {
-    faults: [],
-    quality: 0.5,
-    compensations: [],
-    tempo_deviation: 0,
-  };
 
-  try {
-    let raw: string;
-    if (frameBase64) {
-      // Vision calls don't support systemParts yet — use plain system
-      raw = await callClaudeVision({
-        model: "claude-sonnet-4-6",
-        system: systemParts ? systemParts.join("") : FORM_CRITIC_SYSTEM,
-        imageBase64: frameBase64,
-        prompt: `Analyze this rep with visual + keypoint data:\n${prompt}\n\nOutput RepAnalysis JSON.`,
-        maxTokens: 2048,
-      });
-    } else {
-      // Use streaming-compatible callClaudeSimple with cached system
-      raw = await callClaudeSimple({
-        model: "claude-sonnet-4-6",
-        system: FORM_CRITIC_SYSTEM,
-        systemParts,
-        prompt: `Analyze this rep:\n${prompt}\n\nOutput RepAnalysis JSON.`,
-        maxTokens: 2048,
-      });
-    }
-    return parseJSON(raw, defaultResult);
-  } catch {
-    return defaultResult;
-  }
-}
-
-async function runSafetyMonitor(prompt: string, frameBase64?: string) {
-  const defaultResult = {
-    halt: false,
-    red_flag_type: null as string | null,
-    severity: 1,
-    reasoning: "",
-    recommendation: "",
-  };
-
-  try {
-    let raw: string;
-    if (frameBase64) {
-      raw = await callClaudeVision({
-        model: "claude-haiku-4-5-20251001",
-        system: SAFETY_MONITOR_SYSTEM,
-        imageBase64: frameBase64,
-        prompt: `Safety check:\n${prompt}\n\nOutput safety JSON.`,
-        maxTokens: 512,
-      });
-    } else {
-      raw = await callClaudeSimple({
-        model: "claude-haiku-4-5-20251001",
-        system: SAFETY_MONITOR_SYSTEM,
-        prompt: `Safety check:\n${prompt}\n\nOutput safety JSON.`,
-        maxTokens: 512,
-      });
-    }
-    return parseJSON(raw, defaultResult);
-  } catch {
-    return defaultResult;
-  }
-}
-
-async function runCueGenerator(
-  assessment: Record<string, unknown>,
-  repNumber: number,
-  setNumber: number,
-  exerciseName: string,
-) {
-  const defaultCue = {
-    text: "Keep going, nice and steady.",
-    emotion: "encouraging" as const,
-    priority: 1,
-    interrupt_current: false,
-  };
-
-  try {
-    const prompt = JSON.stringify({
-      assessment,
-      rep_number: repNumber,
-      set_number: setNumber,
-      exercise_name: exerciseName,
-    });
-
-    const raw = await callClaudeSimple({
-      model: "claude-haiku-4-5-20251001",
-      system: CUE_GENERATOR_SYSTEM,
-      prompt: `Generate a coaching cue:\n${prompt}\n\nOutput cue JSON.`,
-      maxTokens: 256,
-    });
-
-    return parseJSON(raw, defaultCue);
-  } catch {
-    return defaultCue;
-  }
-}

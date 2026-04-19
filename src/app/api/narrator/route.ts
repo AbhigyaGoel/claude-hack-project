@@ -1,7 +1,5 @@
 import { NextRequest } from "next/server";
-import { streamClaude } from "@/lib/claude/client";
-import { NARRATOR_SYSTEM } from "@/lib/claude/prompts";
-import { loadPatientContext } from "@/lib/claude/memory";
+import { streamNarration } from "@/agents/clinicalNarrator";
 import { getDb } from "@/db";
 import { narratorLog } from "@/db/schema";
 
@@ -21,22 +19,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Load patient context for clinical reasoning
-    const patientContext = loadPatientContext(patient_id);
-
-    const prompt = JSON.stringify({
-      session_id,
-      current_exercise: current_exercise ?? null,
-      rep_data: rep_data ?? null,
-      assessment: assessment ?? null,
-      timestamp: new Date().toISOString(),
-    });
-
-    const systemParts = [
-      NARRATOR_SYSTEM,
-      `\n\n## Patient Context\n${patientContext}`,
-    ];
-
     const encoder = new TextEncoder();
     let fullText = "";
     const sessionStartMs = Date.now();
@@ -44,33 +26,20 @@ export async function POST(req: NextRequest) {
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
-          const stream = streamClaude({
-            model: "claude-opus-4-7",
-            system: NARRATOR_SYSTEM,
-            systemParts,
-            messages: [
-              {
-                role: "user",
-                content: `Provide clinical reasoning narration for this moment in the session:\n${prompt}`,
-              },
-            ],
-            maxTokens: 2048,
-            thinking: { type: "enabled", budget_tokens: 8192 },
+          const narration = streamNarration({
+            session_id,
+            patient_id,
+            current_exercise,
+            rep_data,
+            assessment,
           });
 
-          for await (const chunk of stream) {
-            if (chunk.type === "text") {
-              fullText += chunk.content;
-              const sseData = JSON.stringify({
-                type: "narrator",
-                content: chunk.content,
-              });
-              controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
-            }
-            // Thinking chunks are internal reasoning — do not stream to client
+          for await (const chunk of narration) {
+            fullText += chunk.content;
+            const sseData = JSON.stringify({ type: "narrator", content: chunk.content });
+            controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
           }
 
-          // Log the complete narration to the database
           if (fullText.length > 0) {
             const db = getDb();
             await db.insert(narratorLog).values({
@@ -81,7 +50,6 @@ export async function POST(req: NextRequest) {
             });
           }
 
-          // Send done event
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
           controller.close();
         } catch (error) {
