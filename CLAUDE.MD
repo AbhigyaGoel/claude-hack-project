@@ -1,348 +1,198 @@
 # Vero — AI Physical Therapy Suite
 
-## Core Thesis
+## What It Is
 
-Vero is not an app that calls Claude. Vero is a **swarm of specialized Claude agents** with pose, vision, music, and voice as tools. Every non-trivial decision — what to say, when to stop, which exercise to pick, whether this rep counts, whether to refer out — is made by a Claude agent.
+Vero is a browser-native PT system where specialized Claude agents handle clinical decisions — intake screening, exercise programming, real-time form analysis, coaching cues, and session reporting. MediaPipe provides pose estimation, ElevenLabs provides voice, Tone.js provides adaptive music. Zero server-side CV.
 
 ---
 
-## Stack
+## Stack (Actual)
 
-- **Frontend:** Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui
+- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS
 - **Pose:** MediaPipe Tasks Vision (browser WASM), 33-keypoint BlazePose
-- **Claude SDK:** `@anthropic-ai/sdk` + Claude Agent SDK for sub-agents
-- **Models:** `claude-opus-4-7` (reasoning-heavy), `claude-sonnet-4-6` (form loop), `claude-haiku-4-5-20251001` (sub-second cues)
-- **Audio:** Tone.js + GrooVAE (Magenta.js)
-- **Voice:** ElevenLabs Conversational AI + TTS
-- **Storage:** SQLite + Drizzle, IndexedDB cache
-- **MCP:** Vero exposes itself as an MCP server; consumes Apple Health, Google Fit, Calendar, Gmail
+- **Claude:** `@anthropic-ai/sdk` — Sonnet 4.6 (form loop, orchestration), Haiku 4.5 (cues, safety), Opus 4.7 (intake, reports)
+- **Voice:** ElevenLabs Conversational AI (intake) + TTS (coaching cues)
+- **Audio:** Tone.js (adaptive music engine with phase-based BPM)
+- **Storage:** Supabase Postgres + Drizzle ORM
+- **Auth:** Supabase Auth (email/password)
 
 ---
 
 ## Multi-Agent Architecture
 
-Three Claude agents run in parallel during a live session, coordinated via shared session state.
+During a live exercise session, these agents run in parallel:
 
 ```
-                     ┌───────────────────────────┐
-                     │ Orchestrator (Sonnet 4.6) │
-                     │ tool-use loop, main flow  │
-                     └──────────┬────────────────┘
-                                │ spawns sub-agents via Agent SDK
-         ┌──────────────────────┼──────────────────────┐
-         │                      │                      │
-┌────────▼─────────┐  ┌─────────▼─────────┐  ┌─────────▼────────┐
-│ Safety Monitor   │  │ Clinical Narrator │  │ Form Critic      │
-│ (Haiku 4.5)      │  │ (Opus 4.7)        │  │ (Sonnet 4.6)     │
-│ parallel stream, │  │ streams reasoning │  │ vision + pose    │
-│ red-flag halt    │  │ to patient live   │  │ per-rep analysis │
-│ authority        │  │ (transparency)    │  │                  │
-└──────────────────┘  └───────────────────┘  └──────────────────┘
+Session Page (client)
+    │
+    ├─ POST /api/form-critic      → formCritic agent (Sonnet) — per-rep quality analysis
+    ├─ POST /api/safety-monitor   → safetyMonitor agent (Haiku) — red-flag detection on webcam frames
+    ├─ POST /api/rep-commentary   → PT note generation (Sonnet) — one-sentence clinical note per rep
+    ├─ POST /api/cue              → cueGenerator agent (Haiku) — coaching text for ElevenLabs TTS
+    └─ POST /api/narrator         → clinicalNarrator agent (Sonnet) — SSE streaming reasoning
 ```
 
-**Safety Monitor** — hard-interrupt authority. Only job: detect red flags (sharp radiating pain, numbness, bowel/bladder mention, chest pain, sudden weakness). Haiku for sub-300ms latency.
+**Form Critic** — called after each completed rep. Receives exercise spec + peak angle. Returns `RepAnalysis { faults[], quality, compensations[], tempo_deviation }`. Faults display in the right sidebar.
 
-**Clinical Narrator** — streams "inner monologue" reasoning to a side panel: _"Noticing slight knee valgus on left side — consistent with weak glute med. Will cue external rotation next set."_ Patient sees the reasoning. Trust differentiator.
+**Safety Monitor** — runs every 3 seconds on webcam frames (320×240 JPEG). Checks for grimacing, guarding, distress. If `halt: true`, session stops immediately.
 
-**Form Critic** — per-rep vision + pose analyzer. Sonnet for speed.
+**Rep Commentary** — generates a one-sentence PT note per rep, persisted to `narrator_log` table for chat memory/RAG.
 
----
-
-## Model Routing
-
-| Agent                | Model                              | Why                                 |
-| -------------------- | ---------------------------------- | ----------------------------------- |
-| Intake               | Opus 4.7 + extended thinking (12k) | differential dx reasoning           |
-| Programming          | Opus 4.7                           | biomechanical reasoning + citations |
-| Orchestrator         | Sonnet 4.6                         | tool-use loop                       |
-| Form Critic          | Sonnet 4.6 + vision                | per-rep analysis, 1 Hz              |
-| Safety Monitor       | Haiku 4.5                          | sub-300ms red flag detection        |
-| Clinical Narrator    | Opus 4.7 + interleaved thinking    | streamed reasoning                  |
-| Cue Generator        | Haiku 4.5                          | instant verbal correction text      |
-| Session Report       | Opus 4.7 + extended thinking       | longitudinal synthesis              |
-| Between-session Chat | Sonnet 4.6 + memory tool           | adherence, questions                |
+**Cue Generator** — produces coaching text (max 15 words) with emotion tag for ElevenLabs TTS.
 
 ---
 
-## Prompt Caching (Critical for Cost)
+## Agents (src/agents/)
 
-Cached prefixes, rebuilt per session:
-
-1. Clinical system prompt (~3k tokens)
-2. Exercise library JSON filtered to patient's body region (~40k tokens)
-3. Patient profile + prior sessions summary (~5k tokens)
-4. Tool definitions (~2k tokens)
-
-Cache hit reduces form-loop cost ~90%. Rebuild on session start, reuse for the entire session.
-
----
-
-## Claude Memory Tool
-
-Every patient has a persistent memory namespace: `/patients/{id}/`.
-
-Files Claude maintains:
-
-- `/patients/{id}/case_notes.md` — running SOAP notes, updated per session
-- `/patients/{id}/progression_history.json` — exercise advancement decisions + rationale
-- `/patients/{id}/pattern_observations.md` — compensations, preferences, pain triggers
-- `/patients/{id}/goals.md` — functional goals + progress
-
-A patient returning after 2 weeks gets a Claude that _remembers them_ — via memory tool reading actual files, not RAG.
+| Agent | File | Model | Purpose |
+|-------|------|-------|---------|
+| Diagnostic Interviewer | `diagnosticInterviewer.ts` | Sonnet | Structured ortho screen, SINSS framework, red flag detection |
+| Program Designer | `programDesigner.ts` | Sonnet | Exercise selection from 105-exercise library |
+| Form Critic | `formCritic.ts` | Sonnet + Vision | Per-rep biomechanical analysis |
+| Safety Monitor | `safetyMonitor.ts` | Haiku | Red-flag detection, halt authority |
+| Clinical Narrator | `clinicalNarrator.ts` | Sonnet | SSE streaming clinical reasoning |
+| Cue Generator | `cueGenerator.ts` | Haiku | Instant verbal correction text |
+| Vision Analyst | `visionAnalyst.ts` | Sonnet + Vision | Frame analysis for faults keypoints miss |
+| Chat Agent | `chatAgent.ts` | Sonnet + memory | Between-session patient chat |
+| Session Report | `sessionReport.ts` | Sonnet | Post-session summary generation |
+| Progress Analyst | `progressAnalyst.ts` | Sonnet | Longitudinal trend analysis |
 
 ---
 
-## Skills (Custom, per Body Region)
+## Session Flow
 
-Region-specific skills loaded by the orchestrator based on intake profile:
+1. **Profile Selection** — existing patient or create new
+2. **Intake** — ElevenLabs Conversational AI voice interview OR text-based form (body region, red flags, assessment questions)
+3. **Diagnosis** — severity score, functional deficits, clearance status displayed
+4. **Plan Review** — exercise list with drag-to-reorder, adjustable sets/reps, remove exercises
+5. **Pre-Pain Rating** — 0-10 pain scale
+6. **Exercise Loop** — 3-panel layout:
+   - Left: exercise setlist with progress bar, per-exercise status
+   - Center: webcam with MediaPipe skeleton overlay + angle labels
+   - Right: rep counter, exercise demo animation, exercise guide, PT notes, form critic feedback, skip button
+7. **Post-Pain Rating** — 0-10 pain scale
+8. **Summary** — exercises completed, pain change, link to progress
+
+---
+
+## Pose Estimation
+
+- MediaPipe PoseLandmarker (lite model, browser WASM, 30fps)
+- Joint angle calculations: shoulder flexion, elbow flexion, hip flexion, knee flexion, cervical flexion/rotation/lateral flex, trunk flexion, ankle dorsiflexion
+- Angles return clinical values: 0° at neutral, increasing with movement
+- Rep detection: state machine (idle → ascending → descending → complete) with thresholds: 25% start, 50% peak, 15% reset, 800ms minimum duration
+
+---
+
+## Exercise Demo Animations
+
+Template-based skeleton animation system in `src/lib/animation/`:
+- 7 anatomically correct base poses (standing, side, supine, prone, sidelying, quadruped, seated)
+- 34 movement templates across 6 body regions using joint rotation math
+- Same `drawSkeleton()` renderer as live camera overlay
+- Auto-plays on mount, loops continuously at 30fps
+- Template registry: 3-tier lookup (exact ID → joint angle pattern → body region default)
+
+---
+
+## Exercise Library
+
+105 exercises across 6 body regions in `src/data/exercises.json`:
+- Shoulder: 19, Knee: 18, Hip: 16, Lumbar: 16, Cervical: 15, Ankle: 21
+- Each exercise: target_angles, tolerances, tempo, cues, compensation_patterns with MediaPipe landmarks, contraindications, regression/progression
+- Generation script: `src/exercises/generate.ts` (Claude Opus)
+
+---
+
+## Clinical Skills
+
+6 body-region clinical skills (2,731 lines total) in `src/skills/`:
+- Shoulder (534L): 8+ special tests, impingement/instability/cuff pathways, 4-phase exercise matrix
+- Knee (650L): Lachman/McMurray/Thessaly, ACL/meniscal/PF protocols, LSI thresholds
+- Lumbar (396L): McKenzie classification, centralization tracking, cauda equina criteria
+- Cervical (436L): Spurling's, WAD grading I-IV, cervicogenic headache differential
+- Hip (321L): FADIR/FABER/Trendelenburg, FAI/labral/OA protocols
+- Ankle (394L): Ottawa rules, Alfredson protocol, chronic instability
+
+---
+
+## Patient Memory
+
+Supabase-backed per-patient memory (`patient_memory` table):
+- `case_notes.md` — running SOAP notes
+- `progression_history.json` — exercise advancement decisions
+- `pattern_observations.md` — compensations, preferences, pain triggers
+- `goals.md` — functional goals + progress
+- Memory tool handlers for Claude tool-use (read/write/append/list)
+
+---
+
+## Database (Supabase Postgres + Drizzle)
 
 ```
-/skills
-  /shoulder/SKILL.md      # Hawkins-Kennedy, Neer, Empty Can protocols
-  /knee/SKILL.md          # Lachman, McMurray, patellar tracking
-  /lumbar/SKILL.md        # slump, SLR, centralization tracking
-  /cervical/SKILL.md      # Spurling's, upper quarter screen
-  /hip/SKILL.md           # FADIR, FABER, Trendelenburg
-```
-
-Each skill encodes clinical reasoning for that region: which special tests to "order" via pose, what findings mean, which exercises match which findings. Skills scale Vero to 6+ body regions without one bloated prompt.
-
----
-
-## Agent 1 — Intake (Extended Thinking + Sub-Agents)
-
-1. Primary intake agent runs orthopedic screen via ElevenLabs voice
-2. Extended thinking (budget 12k) maintains running differential diagnosis
-3. When two hypotheses tie, spawns a **differential resolver sub-agent** (Agent SDK) that proposes a specific pose-based special test
-4. Main agent executes the test via `pose_special_test` tool, feeds result back
-5. Sub-agent returns narrowed differential; main continues
-
-**Output:** `PatientProfile` JSON, ranked `DifferentialDx[]` with confidences, cited reasoning (Claude pulls from research corpus via file search tool).
-
----
-
-## Agent 2 — Programming (Claude-Generated Exercise Library)
-
-The library itself is generated by Claude, not hand-curated.
-
-**One-time build:**
-
-- Claude (Opus + extended thinking + web search) generates ~200 exercises per body region
-- Each entry: name, target muscles, regression/progression chain, **angle windows per joint**, common faults, contraindications, research citations
-- Human-reviewed once, frozen in `/exercises/library.json`
-
-**Per-session programming:**
-
-- Claude reads filtered library (prompt-cached), profile, MCP health data, prior deltas
-- Outputs `ExercisePlan` with per-exercise `progression_rule` as executable JSON logic
-- Cites specific studies for each exercise selection
-
----
-
-## Agent 3 — Real-Time Form Loop
-
-**Per-frame (browser, 30 fps):**
-
-- MediaPipe → 33 keypoints → joint angles
-- Local rule check against `ExerciseSpec.angle_windows`
-- Rep counter via zero-crossing on primary joint
-
-**Per rep (not per second):**
-
-- 1-second video clip (30 frames) + keypoint timeseries → `/api/form-critic`
-- Form Critic analyzes the **full rep as a video**, not a single frame
-- Catches kinetic chain issues single frames miss
-- Output: `RepAnalysis { faults[], quality: 0-1, compensations[], tempo_deviation }`
-
-**Cue generation (parallel):**
-
-- If fault severity ≥ 3, Orchestrator calls Cue Generator (Haiku)
-- Cue text conditioned on: patient's prior cue responses, coaching style preference, fault type
-- → ElevenLabs with emotion tag → patient hears before next rep
-
-**Safety Monitor parallel stream:**
-
-- Watches transcript (grunts, verbal pain) + vision frames for grimacing, guarding
-- On red flag: emits `HALT` → Orchestrator stops session, logs, refers
-
----
-
-## Agent 4 — Adaptive Music (Claude Decides Tempo Strategy)
-
-- Tone.js + GrooVAE handle audio generation
-- Claude decides **when and how** to modulate tempo strategically
-- Patient slowing = fatigue → Claude chooses: maintain tempo to push (strength block), slow down (cooldown block), or end set (failure detection) based on plan phase
-- `set_music_tempo` tool implements the decision
-
----
-
-## Agent 5 — Coaching Voice
-
-- `speak` tool: `{ text, emotion, priority, interrupt_current }`
-- Cue Generator (Haiku) produces text
-- ElevenLabs renders with emotion-conditioned voice settings
-- Priority queue managed by Orchestrator
-
----
-
-## Agent 6 — Session Report (Interactive Artifact)
-
-Post-session:
-
-1. Report Agent (Opus + extended thinking) synthesizes session log, prior sessions, health data, case notes memory
-2. Updates `/patients/{id}/case_notes.md` via memory tool
-3. Generates an **interactive React artifact** with:
-   - ROM progression chart
-   - Form quality trend
-   - Pain trajectory
-   - Adherence heatmap
-   - Narrated summary
-4. Artifact uses Anthropic API to let patient **ask follow-up questions** about their own report
-5. PDF export for human PT handoff
-
----
-
-## Between-Session Chat
-
-Patient texts Vero anytime. Chat agent (Sonnet + memory tool) has full case history.
-
-- "Is this soreness normal?" → references specific exercise done 2 days ago
-- "I can't do today's session" → adjusts plan
-- "My knee clicked today" → logs to case notes, may escalate to Safety Monitor review
-
-Turns Vero from an app into continuous care.
-
----
-
-## Vero as MCP Server
-
-Vero exposes `vero-mcp`. A real PT on Claude Desktop connects and queries:
-
-- `get_patient_summary(patient_id)`
-- `get_session_history(patient_id)`
-- `get_form_events(session_id)`
-- `override_plan(patient_id, plan)`
-
-A human PT managing 20 Vero patients supervises via Claude Desktop + vero-mcp. Vero integrates into clinical practice, doesn't replace it.
-
----
-
-## Batch Overnight Analysis
-
-Nightly Claude Batch API job across all active patients:
-
-- Re-analyzes last 7 days of sessions
-- Detects patterns: _"Patient 12 shows knee valgus only on left side, only after rep 8 — likely glute med fatigue"_
-- Updates `pattern_observations.md` memory files
-- Flags plateau-ing patients for human PT review via vero-mcp
-
----
-
-## Data Model (Drizzle)
-
-```ts
-patients(id, profile_json, memory_path, created_at);
-plans(id, patient_id, plan_json, active, citations_json);
-sessions(id, plan_id, started_at, ended_at, summary_json, artifact_url);
-sets(id, session_id, exercise_id, reps, rpe, pain, form_score);
-rep_analyses(id, set_id, rep_num, video_clip_url, faults_json, quality);
-form_events(id, set_id, t_ms, fault, severity, cue_sent);
-red_flags(id, session_id, type, transcript, halted, referred);
-narrator_log(id, session_id, t_ms, reasoning_text);
-chat_messages(id, patient_id, role, content, created_at);
+patients(id, user_id, name, profile_json, created_at)
+plans(id, patient_id, plan_json, active, citations_json, created_at)
+sessions(id, plan_id, patient_id, user_id, started_at, ended_at, pain_pre, pain_post, summary_json, artifact_url)
+sets(id, session_id, exercise_id, exercise_name, set_number, reps, rpe, pain, form_score)
+rep_analyses(id, set_id, rep_num, video_clip_url, faults_json, quality)
+form_events(id, set_id, t_ms, fault, severity, cue_sent)
+red_flags(id, session_id, type, transcript, halted, referred)
+narrator_log(id, session_id, patient_id, source, t_ms, reasoning_text, created_at)
+chat_messages(id, patient_id, user_id, role, content, created_at)
+patient_memory(id, patient_id, user_id, filename, content, updated_at)
 ```
 
 ---
 
-## File Structure
+## API Routes (22 endpoints)
 
-```
-/app
-  /api
-    /intake/route.ts              # Agent 1 + differential resolver sub-agent
-    /plan/route.ts                # Agent 2
-    /orchestrator/route.ts        # main tool-use loop (SSE)
-    /form-critic/route.ts         # per-rep video analysis
-    /safety-monitor/route.ts      # parallel Haiku stream
-    /narrator/route.ts            # Clinical Narrator SSE
-    /cue/route.ts                 # Cue Generator (Haiku)
-    /report/route.ts              # Agent 6 artifact + PDF
-    /chat/route.ts                # between-session chat
-    /mcp/[...path]/route.ts       # Vero MCP server endpoints
-    /batch/nightly/route.ts       # cron-triggered
-  /(app)
-    /intake/page.tsx
-    /session/[id]/page.tsx        # live pose + music + narrator panel
-    /history/page.tsx
-    /chat/page.tsx
-    /report/[id]/page.tsx         # interactive artifact
-/lib
-  /claude
-    client.ts                     # SDK wrapper w/ prompt caching
-    tools.ts                      # tool definitions
-    memory.ts                     # memory tool wrapper
-    sub-agents.ts                 # Agent SDK spawners
-    /prompts                      # system prompts per agent
-  /pose
-  /audio
-  /voice
-  /mcp
-    server.ts                     # Vero MCP server
-    clients.ts                    # Health/Calendar/Gmail clients
-/skills
-  /shoulder/SKILL.md
-  /knee/SKILL.md
-  /lumbar/SKILL.md
-  /cervical/SKILL.md
-  /hip/SKILL.md
-/exercises
-  library.json
-  generate.ts                     # one-time Claude generation script
-/patient-memory                   # memory tool root
-  /{patient_id}/...
-```
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/auth/*` | POST | Login, signup, logout, me |
+| `/api/patients` | GET/POST | List/create patients |
+| `/api/patients/[id]` | GET/DELETE | Get/delete patient |
+| `/api/sessions` | GET/POST | List/save sessions |
+| `/api/intake` | POST | Run diagnostic intake agent |
+| `/api/plan` | POST | Generate exercise plan |
+| `/api/form-critic` | POST | Per-rep form analysis |
+| `/api/safety-monitor` | POST | Red-flag detection |
+| `/api/narrator` | POST | SSE streaming clinical reasoning |
+| `/api/cue` | POST | Coaching cue generation |
+| `/api/rep-commentary` | POST | Per-rep PT note for memory |
+| `/api/vision` | POST | Vision frame analysis |
+| `/api/report` | POST | Session report generation |
+| `/api/chat` | POST | Between-session chat |
+| `/api/mcp` | GET/POST | MCP server for PT supervision |
+| `/api/batch/nightly` | POST | Overnight pattern analysis |
+| `/api/elevenlabs/*` | POST | TTS signed URLs |
+| `/api/tts` | POST | Text-to-speech |
 
 ---
 
-## Build Order
+## Pages
 
-1. Scaffold + MediaPipe pose overlay
-2. Claude client with prompt caching + tool registry
-3. Orchestrator SSE skeleton with 2 dummy tools
-4. Agent 1 intake (text, then voice) + differential resolver sub-agent
-5. Exercise library generation script (one region)
-6. Agent 2 programming with citations
-7. Agent 3 local rule check + basic cueing
-8. Form Critic with video-clip analysis
-9. Safety Monitor parallel stream
-10. Clinical Narrator side panel
-11. Cue Generator (Haiku)
-12. ElevenLabs voice everywhere
-13. Adaptive music
-14. Memory tool integration
-15. Interactive Artifact report
-16. Between-session chat
-17. Vero MCP server
-18. Batch nightly analysis
-19. Additional body-region skills
-
-Ship 1–12 for demo. 13–19 for post-hackathon.
+| Path | Purpose |
+|------|---------|
+| `/` | Home — profile badge, start session, view progress, chat |
+| `/session` | Live exercise session (intake → plan → exercise → summary) |
+| `/progress` | D3 charts: form quality, pain trends, volume, session history |
+| `/chat` | Between-session chat with Vero |
+| `/report/[id]` | Interactive session report with follow-up Q&A |
+| `/login` | Auth |
 
 ---
 
-## Demo Script
+## MCP Server
 
-- 60s voice intake → profile + cited differential → plan with research citations rendered
-- Live squat set: Clinical Narrator panel streams reasoning while patient moves
-- 3 form faults caught via video-clip analysis: knee valgus, forward lean, shallow depth — each cued with emotion-conditioned voice
-- Scripted "sharp shooting pain down my leg" → Safety Monitor halts session in <300ms, refers out
-- Post-session interactive artifact opens; judge asks it _"why did you pick split squats?"_ → Claude answers from case notes memory
+`/api/mcp` exposes 6 tools for human PT supervision via Claude Desktop:
+- `list_patients`, `get_patient_summary`, `get_session_history`
+- `get_form_events`, `get_red_flags`, `override_plan`
 
 ---
 
 ## Non-Goals
 
-- Native mobile
-- Server-side pose
-- Diagnosis claims (clinical decision support)
-- Full HIPAA at hackathon (flag in roadmap)
+- Native mobile app
+- Server-side pose processing
+- Diagnosis claims (clinical decision support only)
+- Full HIPAA compliance (flagged in roadmap)
