@@ -4,7 +4,7 @@ import { buildCoachAgentPayload } from "@/lib/coachAgentConfig";
 const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
 
 // Bump when voice/prompt config changes so the module-level cache is invalidated
-const COACH_CONFIG_VERSION = "v6-silent-start";
+const COACH_CONFIG_VERSION = "v7-silent-connect";
 
 let cachedAgentId: string | null = null;
 let cachedConfigVersion: string | null = null;
