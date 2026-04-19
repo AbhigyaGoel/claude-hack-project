@@ -40,13 +40,27 @@ Your output MUST be valid JSON matching this exact shape, with no markdown fenci
 {
   "message": "2–4 sentences. How today went, what to feel good about, what to keep in mind. Warm but honest. No jargon.",
   "next_steps": ["concrete action 1", "concrete action 2"],
-  "resources": [{"title": "...", "description": "one sentence about what it is or helps with"}]
+  "resources": [{"title": "...", "description": "one sentence about what it is or helps with"}],
+  "referral_advice": null
 }
 
 Rules:
 - message: 2–4 sentences, conversational. Name ONE thing that went well and ONE thing to watch.
 - next_steps: 1 to 3 items. Start each with a verb. Focused on what the PATIENT can do, not what a clinician would do.
-- resources: 0 to 3 items. Can be self-care tips ("gentle calf stretches between sessions"), lifestyle ideas, or "see a PT in person if X happens." No fake URLs.
+- resources: 0 to 3 items. Can be self-care tips ("gentle calf stretches between sessions"), lifestyle ideas. No fake URLs.
+- referral_advice: ONLY include this if pain_post >= 6 (you will be told the pain values in the prompt). Otherwise set it to null.
+  If pain_post >= 6, replace null with:
+  {
+    "doctor_type": "sports medicine physician" | "orthopedic surgeon" | "physiatrist" | "neurologist" | "primary care physician",
+    "urgency": "routine" | "soon" | "urgent",
+    "what_to_tell_them": ["3-4 plain-language bullet points about the patient's situation"],
+    "questions_to_ask": ["2-3 questions to bring to the appointment"]
+  }
+  Urgency rules:
+  - "urgent": any red flags were detected during intake OR pain_post >= 8
+  - "soon": pain_post 6-7 AND pain did not improve from pain_pre (or got worse)
+  - "routine": pain_post 6-7 AND some improvement from pain_pre
+  Keep what_to_tell_them in plain language — describe the body part, how long it's been an issue, what makes it better/worse.
 - Output JSON only. No commentary, no code fences, no preamble.`;
 
 interface Payload {
@@ -54,10 +68,18 @@ interface Payload {
   session_id: string;
 }
 
+interface ReferralAdvice {
+  doctor_type: string;
+  urgency: "routine" | "soon" | "urgent";
+  what_to_tell_them: string[];
+  questions_to_ask: string[];
+}
+
 interface CoachOutput {
   message: string;
   next_steps: string[];
   resources: { title: string; description: string }[];
+  referral_advice?: ReferralAdvice | null;
 }
 
 function parseCoachOutput(raw: string): CoachOutput | null {
@@ -79,6 +101,21 @@ function parseCoachOutput(raw: string): CoachOutput | null {
     return null;
   }
   if (typeof obj.message !== "string" || !obj.message.trim()) return null;
+
+  let referral_advice: ReferralAdvice | null = null;
+  const raw_referral = (obj as Record<string, unknown>).referral_advice;
+  if (raw_referral && typeof raw_referral === "object") {
+    const r = raw_referral as Record<string, unknown>;
+    if (typeof r.doctor_type === "string" && typeof r.urgency === "string") {
+      referral_advice = {
+        doctor_type: r.doctor_type,
+        urgency: (["routine", "soon", "urgent"].includes(r.urgency) ? r.urgency : "routine") as ReferralAdvice["urgency"],
+        what_to_tell_them: Array.isArray(r.what_to_tell_them) ? r.what_to_tell_them.map(String) : [],
+        questions_to_ask: Array.isArray(r.questions_to_ask) ? r.questions_to_ask.map(String) : [],
+      };
+    }
+  }
+
   return {
     message: obj.message,
     next_steps: Array.isArray(obj.next_steps)
@@ -90,6 +127,7 @@ function parseCoachOutput(raw: string): CoachOutput | null {
             !!r && typeof r === "object" && typeof (r as { title?: unknown }).title === "string",
         )
       : [],
+    referral_advice,
   };
 }
 
@@ -102,6 +140,11 @@ function renderForLog(c: CoachOutput): string {
   if (c.resources.length) {
     lines.push("", "Worth checking out:");
     c.resources.forEach((r) => lines.push(`- ${r.title}: ${r.description}`));
+  }
+  if (c.referral_advice) {
+    const ref = c.referral_advice;
+    lines.push("", `Consider seeing a ${ref.doctor_type} (${ref.urgency})`);
+    ref.what_to_tell_them.forEach((s) => lines.push(`- ${s}`));
   }
   return lines.join("\n");
 }
@@ -131,8 +174,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "patient not found" }, { status: 404 });
   }
 
-  // Gather this session's data + prior commentary in parallel.
-  const [sessionRow, thisSessionSets, thisSessionCommentary, patientContext] =
+  // Gather this session's data + prior commentary + patient profile in parallel.
+  const [sessionRow, thisSessionSets, thisSessionCommentary, patientContext, patientRow] =
     await Promise.all([
       db
         .select()
@@ -153,6 +196,11 @@ export async function POST(req: NextRequest) {
         .where(eq(narratorLog.session_id, body.session_id))
         .orderBy(asc(narratorLog.t_ms)),
       loadPatientContext(body.patient_id),
+      db
+        .select({ profile_json: patients.profile_json })
+        .from(patients)
+        .where(eq(patients.id, body.patient_id))
+        .limit(1),
     ]);
 
   const session = sessionRow[0];
@@ -194,10 +242,29 @@ export async function POST(req: NextRequest) {
         `  - ${s.started_at?.toISOString().slice(0, 10)}: pain ${s.pain_pre} → ${s.pain_post}`,
     );
 
+  // Extract red flags and diagnostic info from patient profile for referral logic
+  const profile = patientRow[0]?.profile_json as Record<string, unknown> | null;
+  const diagnostic = profile?.diagnostic as Record<string, unknown> | undefined;
+  const redFlags: string[] = Array.isArray(diagnostic?.red_flags) ? (diagnostic.red_flags as string[]) : [];
+  const bodyRegion = typeof diagnostic?.body_region === "string" ? diagnostic.body_region : "the affected area";
+  const mechanism = typeof diagnostic?.mechanism === "string" ? diagnostic.mechanism : null;
+  const painPost = session.pain_post ?? null;
+
+  const referralContext = painPost !== null && painPost >= 6
+    ? [
+        ``,
+        `IMPORTANT: pain_post is ${painPost}/10 — this is >= 6, so you MUST include referral_advice in your JSON output.`,
+        `Red flags detected at intake: ${redFlags.length ? redFlags.join(", ") : "none"}`,
+        `Body region: ${bodyRegion}${mechanism ? `, mechanism: ${mechanism}` : ""}`,
+      ]
+    : [``, `pain_post is ${painPost ?? "unknown"}/10 — below 6, so set referral_advice to null.`];
+
   const userPrompt = [
     `Today's session just ended.`,
     ``,
-    `Pain this session: ${session.pain_pre ?? "?"} → ${session.pain_post ?? "?"}`,
+    `Pain this session: ${session.pain_pre ?? "?"} → ${painPost ?? "?"}`,
+    ...referralContext,
+    ``,
     `Sets completed:`,
     ...(setLines.length ? setLines : ["  (none)"]),
     ``,
@@ -218,7 +285,7 @@ export async function POST(req: NextRequest) {
       system: SYSTEM_PROMPT,
       systemParts: [SYSTEM_PROMPT, `\n\n# Patient Context\n${patientContext}`],
       prompt: userPrompt,
-      maxTokens: 800,
+      maxTokens: 1200,
     });
     console.log(
       `[progression-coach] Haiku call returned in ${Date.now() - t0}ms (${raw.length} chars)`,

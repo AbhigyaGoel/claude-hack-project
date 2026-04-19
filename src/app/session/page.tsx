@@ -130,7 +130,18 @@ export default function SessionPage() {
     message: string;
     next_steps: string[];
     resources: { title: string; description: string }[];
+    referral_advice?: {
+      doctor_type: string;
+      urgency: "routine" | "soon" | "urgent";
+      what_to_tell_them: string[];
+      questions_to_ask: string[];
+    } | null;
   } | null>(null);
+  const [reasonerStream, setReasonerStream] = useState("");
+  const [isReasonerStreaming, setIsReasonerStreaming] = useState(false);
+  const [lastSetFormScore, setLastSetFormScore] = useState<number | null>(null);
+  const [lastSetName, setLastSetName] = useState<string>("");
+  const [lastSetNumber, setLastSetNumber] = useState<number>(1);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -160,6 +171,9 @@ export default function SessionPage() {
   // Observer notes for the set currently in progress. Reset at set start,
   // passed to the Reasoner at set end.
   const currentSetObserverNotesRef = useRef<string[]>([]);
+  // Form Critic results for the set currently in progress. Reset at set start,
+  // passed to the Reasoner at set end alongside observer notes.
+  const currentSetFormCriticRef = useRef<import("@/agents/formCritic").RepAnalysis[]>([]);
 
   // --- Observer TTS playback ---
   // The Form Observer's commentary is spoken aloud via /api/tts. Behaviour:
@@ -265,6 +279,8 @@ export default function SessionPage() {
         return;
       }
       const data = await res.json();
+      // Accumulate full RepAnalysis for the clinical reasoner at set end
+      currentSetFormCriticRef.current.push(data);
       if (data.faults?.length > 0) {
         logVeroOk(`form-critic: ${data.faults.length} fault(s) detected`, data.faults);
         setFormCriticFaults(data.faults.map((f: { description?: string; type?: string }) => f.description || f.type || ""));
@@ -481,6 +497,7 @@ export default function SessionPage() {
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
     currentSetObserverNotesRef.current = [];
+    currentSetFormCriticRef.current = [];
     setCommentaryEntries([]);
     setCoachOutput(null);
 
@@ -617,49 +634,83 @@ export default function SessionPage() {
       if (activeProfile) {
         const observerNotes = [...currentSetObserverNotesRef.current];
         currentSetObserverNotesRef.current = [];
+        const formCriticResults = [...currentSetFormCriticRef.current];
+        currentSetFormCriticRef.current = [];
         const completedSetNumber = currentSet;
         const completedExerciseName = currentExercise.name;
         const t0 = performance.now();
+        // Capture form score for this set to display alongside the stream
+        const setQualities = repQualitiesRef.current[currentExerciseIndex] ?? [];
+        const setFormScore = setQualities.length > 0
+          ? Math.round((setQualities.filter((q) => q === "green").length / setQualities.length) * 100)
+          : null;
+
+        setLastSetFormScore(setFormScore);
+        setLastSetName(completedExerciseName);
+        setLastSetNumber(completedSetNumber);
+        setReasonerStream("");
+        setIsReasonerStreaming(true);
+
         logVero(
           `🧩 Reasoner: analyzing set ${completedSetNumber} (${observerNotes.length} observer notes)...`,
         );
-        fetch("/api/clinical-reasoner", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            patient_id: activeProfile.id,
-            session_id: sessionIdRef.current,
-            exercise_name: completedExerciseName,
-            set_number: completedSetNumber,
-            observer_notes: observerNotes,
-            t_ms: Date.now() - sessionStartRef.current,
-          }),
-        })
-          .then(async (r) => {
-            const ms = Math.round(performance.now() - t0);
-            if (!r.ok) {
-              logVeroWarn(`clinical-reasoner ${r.status} after ${ms}ms`);
-              return null;
+
+        // Stream the clinical reasoner response
+        (async () => {
+          try {
+            const r = await fetch("/api/clinical-reasoner", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                patient_id: activeProfile.id,
+                session_id: sessionIdRef.current,
+                exercise_name: completedExerciseName,
+                set_number: completedSetNumber,
+                observer_notes: observerNotes,
+                form_critic_results: formCriticResults,
+                t_ms: Date.now() - sessionStartRef.current,
+              }),
+            });
+            if (!r.ok || !r.body) {
+              logVeroWarn(`clinical-reasoner ${r.status}`);
+              setIsReasonerStreaming(false);
+              return;
             }
-            const data = await r.json();
-            if (data?.commentary) {
-              logVeroOk(
-                `🩺 Reasoner [set ${completedSetNumber}, ${ms}ms]: "${data.commentary}"`,
-              );
+            const reader = r.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const lines = decoder.decode(value).split("\n");
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                try {
+                  const evt = JSON.parse(line.slice(6));
+                  if (evt.type === "text") {
+                    fullText += evt.content;
+                    setReasonerStream(fullText);
+                  } else if (evt.type === "done") {
+                    setIsReasonerStreaming(false);
+                    if (fullText.trim()) {
+                      logVeroOk(`🩺 Reasoner [set ${completedSetNumber}]: "${fullText.trim().slice(0, 80)}..."`);
+                      setCommentaryEntries((prev) => [
+                        ...prev.slice(-8),
+                        { id: `rsn_${Date.now()}`, text: fullText.trim(), source: "reasoner" as const },
+                      ]);
+                    }
+                  }
+                } catch {
+                  // malformed SSE line, skip
+                }
+              }
             }
-            return data;
-          })
-          .then((data) => {
-            if (data?.commentary) {
-              setCommentaryEntries((prev) => [
-                ...prev.slice(-8),
-                { id: `rsn_${Date.now()}`, text: data.commentary, source: "reasoner" },
-              ]);
-            }
-          })
-          .catch((err) => {
-            logVeroWarn("clinical-reasoner fetch threw", err);
-          });
+            setIsReasonerStreaming(false);
+          } catch (err) {
+            logVeroWarn("clinical-reasoner stream threw", err);
+            setIsReasonerStreaming(false);
+          }
+        })();
       }
 
       if (currentSet >= currentExercise.sets) {
@@ -1351,16 +1402,47 @@ export default function SessionPage() {
 
       {/* Rest */}
       {step === "rest" && (
-        <div className="flex-1 flex items-center justify-center animate-fade-in">
-          <div className="glass-card-bright p-12 text-center max-w-md">
-            <div className="text-6xl font-light font-mono mb-2" style={{ color: "var(--color-accent)" }}>Rest</div>
-            <p className="text-sm mb-3" style={{ color: "var(--color-text-muted)" }}>Take a 60-second break before the next set</p>
-            {plan && currentExerciseIndex < plan.exercises.length && (
-              <p className="text-sm mb-6" style={{ color: "var(--color-text-secondary)" }}>
-                Next: <span style={{ color: "var(--color-accent)" }}>{plan.exercises[currentExerciseIndex]?.name}</span>
-              </p>
+        <div className="flex-1 flex items-center justify-center animate-fade-in p-4">
+          <div className="flex flex-col gap-4 max-w-md w-full">
+            <div className="glass-card-bright p-10 text-center">
+              <div className="text-6xl font-light font-mono mb-2" style={{ color: "var(--color-accent)" }}>Rest</div>
+              <p className="text-sm mb-3" style={{ color: "var(--color-text-muted)" }}>Take a 60-second break before the next set</p>
+              {plan && currentExerciseIndex < plan.exercises.length && (
+                <p className="text-sm mb-6" style={{ color: "var(--color-text-secondary)" }}>
+                  Next: <span style={{ color: "var(--color-accent)" }}>{plan.exercises[currentExerciseIndex]?.name}</span>
+                </p>
+              )}
+              <button onClick={resumeFromRest} className="btn-accent">Continue Exercise</button>
+            </div>
+
+            {/* Clinical Insight — streams in after set completion */}
+            {(reasonerStream || isReasonerStreaming) && (
+              <div className="glass-card p-4" style={{ border: "1px solid rgba(139,92,246,0.3)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#8b5cf6" }} />
+                  <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "#8b5cf6" }}>
+                    Clinical Insight
+                  </span>
+                  {lastSetFormScore !== null && (
+                    <span
+                      className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full"
+                      style={{
+                        background: lastSetFormScore >= 80 ? "rgba(34,197,94,0.15)" : lastSetFormScore >= 50 ? "rgba(234,179,8,0.15)" : "rgba(239,68,68,0.15)",
+                        color: lastSetFormScore >= 80 ? "#22c55e" : lastSetFormScore >= 50 ? "#eab308" : "#ef4444",
+                      }}
+                    >
+                      Set {lastSetNumber} · {lastSetFormScore}% form
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+                  {reasonerStream}
+                  {isReasonerStreaming && (
+                    <span className="inline-block w-1 h-3 ml-0.5 animate-pulse" style={{ background: "#8b5cf6", verticalAlign: "text-bottom" }} />
+                  )}
+                </p>
+              </div>
             )}
-            <button onClick={resumeFromRest} className="btn-accent">Continue Exercise</button>
           </div>
         </div>
       )}
@@ -1447,6 +1529,56 @@ export default function SessionPage() {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {coachOutput.referral_advice && (
+                  <div className="p-4 rounded-xl" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.3)" }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "#fbbf24" }}>
+                        Consider seeing a doctor
+                      </span>
+                      <span
+                        className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full capitalize"
+                        style={{
+                          background: coachOutput.referral_advice.urgency === "urgent" ? "rgba(239,68,68,0.15)" : coachOutput.referral_advice.urgency === "soon" ? "rgba(251,191,36,0.15)" : "rgba(34,197,94,0.15)",
+                          color: coachOutput.referral_advice.urgency === "urgent" ? "#ef4444" : coachOutput.referral_advice.urgency === "soon" ? "#fbbf24" : "#22c55e",
+                        }}
+                      >
+                        {coachOutput.referral_advice.urgency}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium mb-3" style={{ color: "var(--color-text-primary)" }}>
+                      {coachOutput.referral_advice.doctor_type}
+                    </p>
+                    <div className="mb-3">
+                      <div className="text-[10px] font-medium uppercase tracking-wide mb-1.5" style={{ color: "var(--color-text-muted)" }}>
+                        What to tell them
+                      </div>
+                      <ul className="flex flex-col gap-1">
+                        {coachOutput.referral_advice.what_to_tell_them.map((s, i) => (
+                          <li key={i} className="text-xs flex gap-2" style={{ color: "var(--color-text-secondary)" }}>
+                            <span style={{ color: "#fbbf24" }}>•</span>
+                            <span>{s}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    {coachOutput.referral_advice.questions_to_ask.length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-medium uppercase tracking-wide mb-1.5" style={{ color: "var(--color-text-muted)" }}>
+                          Questions to ask
+                        </div>
+                        <ul className="flex flex-col gap-1">
+                          {coachOutput.referral_advice.questions_to_ask.map((q, i) => (
+                            <li key={i} className="text-xs flex gap-2" style={{ color: "var(--color-text-secondary)" }}>
+                              <span style={{ color: "#fbbf24" }}>?</span>
+                              <span>{q}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
