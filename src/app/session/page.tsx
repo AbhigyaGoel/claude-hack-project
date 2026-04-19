@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import IntakeView from "@/components/IntakeView";
 import ConversationalIntake from "@/components/ConversationalIntake";
 import RepCounter from "@/components/RepCounter";
@@ -14,6 +14,7 @@ import type { RepQuality } from "@/types/assessment";
 import type { Landmark } from "@/types/landmark";
 import type { PatientRecord, ExerciseResult } from "@/types/storage";
 import { queryExercises } from "@/lib/exercises";
+import { deriveFocusFromExercises } from "@/lib/focusFromExercises";
 import { mapExerciseAngleKey } from "@/lib/angleCalculator";
 import {
   getActivePatient,
@@ -116,6 +117,13 @@ type MovementPhase = "ready" | "lifting" | "holding" | "lowering";
 
 export default function SessionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // `?focus=knee` lets the home page send the patient into a region-
+  // specific plan (overriding the primary diagnostic's body_region).
+  // `?new=1` forces the intake flow even if a cleared profile exists —
+  // used for "New pain point".
+  const focusParam = searchParams?.get("focus") ?? null;
+  const forceIntake = searchParams?.get("new") === "1";
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [useVoiceIntake, setUseVoiceIntake] = useState(true);
   const [liveIntakeRegion, setLiveIntakeRegion] = useState<import("@/types/exercise").BodyRegion | null>(null);
@@ -377,9 +385,25 @@ export default function SessionPage() {
     getActivePatient()
       .then((profile) => {
         if (cancelled) return;
+
+        // Explicit ?new=1 always routes to a fresh intake, regardless of
+        // the saved profile's cleared state — that's how the home page
+        // starts a new pain point.
+        if (forceIntake) {
+          if (profile) setActiveProfile(profile);
+          setStep("intake");
+          return;
+        }
+
         if (profile?.profile?.diagnostic?.cleared_for_exercise) {
           setActiveProfile(profile);
-          const dx = profile.profile.diagnostic;
+          // ?focus=<region> overrides the primary diagnostic's body region
+          // so the generated plan targets what the user picked on the
+          // home screen (knee / shoulder / lumbar).
+          const baseDx = profile.profile.diagnostic;
+          const dx: DiagnosticResult = focusParam
+            ? { ...baseDx, body_region: focusParam as DiagnosticResult["body_region"] }
+            : baseDx;
           setDiagnostic(dx);
           buildPlanFromDiagnostic(dx, profile.session_count + 1);
           setStep("pre_pain");
@@ -396,7 +420,7 @@ export default function SessionPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [focusParam, forceIntake]);
 
   function buildPlanFromDiagnostic(result: DiagnosticResult, sessionNumber: number) {
     const exercises = queryExercises({
@@ -776,6 +800,8 @@ export default function SessionPage() {
       `🏁 Session ending — persisting 1 session row + ${exerciseRows.length} set row(s) to Supabase...`,
     );
 
+    const focus = deriveFocusFromExercises(exerciseRows.map((r) => r.exercise_id));
+
     try {
       const result = await saveSession({
         id: sessionIdRef.current ?? undefined,
@@ -786,7 +812,7 @@ export default function SessionPage() {
         pain_pre: painPre,
         pain_post: postPain,
         exercises: exerciseRows,
-        summary: null,
+        summary: focus ? { focus } : null,
       });
       setSavedSessionId(result.id);
       logVeroOk(
@@ -944,6 +970,8 @@ export default function SessionPage() {
       { exercise_id: "wall_slide", exercise_name: "Wall Slide", set_number: 2, reps: 8, form_score: 0.81 },
     ];
 
+    const focus = deriveFocusFromExercises(exerciseRows.map((r) => r.exercise_id));
+
     try {
       const saved = await saveSession({
         patient_id: profile.id,
@@ -953,7 +981,7 @@ export default function SessionPage() {
         pain_pre: 5,
         pain_post: 3,
         exercises: exerciseRows,
-        summary: null,
+        summary: focus ? { focus } : null,
       });
       setSavedSessionId(saved.id);
       const fresh = await listSessions(profile.id).catch(() => []);

@@ -2,19 +2,77 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { PatientRecord } from "@/types/storage";
-import { getActivePatient, clearActivePatient, getCurrentUser, logout } from "@/lib/api";
+import type { PatientRecord, SessionRecord } from "@/types/storage";
+import {
+  getActivePatient,
+  clearActivePatient,
+  getCurrentUser,
+  logout,
+  listSessions,
+} from "@/lib/api";
+
+interface FocusEntry {
+  focus: string;
+  count: number;
+  lastDate: string | null;
+  lastPainPost: number | null;
+}
+
+function focusColor(focus: string): string {
+  switch (focus.toLowerCase()) {
+    case "knee":
+      return "#38bdc3";
+    case "shoulder":
+      return "#a78bfa";
+    case "lumbar":
+      return "#f97316";
+    case "integrated":
+      return "#22c55e";
+    default:
+      return "var(--color-accent)";
+  }
+}
 
 export default function Home() {
   const [profile, setProfile] = useState<PatientRecord | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [focuses, setFocuses] = useState<FocusEntry[]>([]);
 
   useEffect(() => {
     getCurrentUser()
       .then((u) => setUsername(u?.username ?? null))
       .catch(() => setUsername(null));
     getActivePatient()
-      .then(setProfile)
+      .then(async (p) => {
+        setProfile(p);
+        if (!p) return;
+        const sessions = await listSessions(p.id).catch(() => [] as SessionRecord[]);
+        const byFocus = new Map<string, FocusEntry>();
+        for (const s of sessions) {
+          const f = (s.summary as { focus?: string } | null)?.focus;
+          if (!f) continue;
+          const existing = byFocus.get(f);
+          if (!existing) {
+            byFocus.set(f, {
+              focus: f,
+              count: 1,
+              lastDate: s.date,
+              lastPainPost: s.pain_post ?? null,
+            });
+          } else {
+            existing.count += 1;
+            if (s.date && (!existing.lastDate || s.date > existing.lastDate)) {
+              existing.lastDate = s.date;
+              existing.lastPainPost = s.pain_post ?? null;
+            }
+          }
+        }
+        setFocuses(
+          Array.from(byFocus.values()).sort((a, b) =>
+            (b.lastDate ?? "").localeCompare(a.lastDate ?? ""),
+          ),
+        );
+      })
       .catch(() => setProfile(null));
   }, []);
 
@@ -110,19 +168,92 @@ export default function Home() {
           </div>
         )}
 
-        <div className="flex gap-4 justify-center">
-          <Link href="/session" className="btn-accent text-base">
-            {profile ? `Start Session #${profile.session_count + 1}` : "Start Session"}
-          </Link>
-          <Link href="/progress" className="btn-ghost text-base">
-            View Progress
-          </Link>
-          {profile && (
-            <Link href="/chat" className="btn-ghost text-base">
-              Chat
+        {/* Pain-point picker — one card per existing focus, plus a "new"
+            card that routes the session into a fresh intake. Falls back to
+            a single Start Session button when the patient has no history
+            yet. */}
+        {profile && focuses.length > 0 ? (
+          <div className="flex flex-col gap-6">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {focuses.map((f) => {
+                const color = focusColor(f.focus);
+                return (
+                  <Link
+                    key={f.focus}
+                    href={`/session?focus=${encodeURIComponent(f.focus)}`}
+                    className="glass-card p-5 text-left hover:border-[var(--color-border-bright)] transition-colors"
+                    style={{ borderLeft: `3px solid ${color}` }}
+                  >
+                    <div
+                      className="text-[11px] uppercase tracking-[0.15em] mb-2"
+                      style={{ color }}
+                    >
+                      Continue
+                    </div>
+                    <div
+                      className="text-xl font-semibold capitalize mb-1"
+                      style={{ color: "var(--color-text-primary)" }}
+                    >
+                      {f.focus}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      {f.count} session{f.count === 1 ? "" : "s"}
+                      {f.lastDate
+                        ? ` · last ${new Date(f.lastDate).toLocaleDateString()}`
+                        : ""}
+                      {f.lastPainPost != null ? ` · pain ${f.lastPainPost}/10` : ""}
+                    </div>
+                  </Link>
+                );
+              })}
+
+              <Link
+                href="/session?new=1"
+                className="glass-card p-5 text-left hover:border-[var(--color-border-bright)] transition-colors flex flex-col justify-center"
+                style={{ borderLeft: "3px dashed var(--color-accent)" }}
+              >
+                <div
+                  className="text-[11px] uppercase tracking-[0.15em] mb-2"
+                  style={{ color: "var(--color-accent)" }}
+                >
+                  Something else
+                </div>
+                <div
+                  className="text-xl font-semibold mb-1"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  New pain point
+                </div>
+                <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  Run a fresh intake for a different region
+                </div>
+              </Link>
+            </div>
+
+            <div className="flex gap-4 justify-center">
+              <Link href="/progress" className="btn-ghost text-base">
+                View Progress
+              </Link>
+              <Link href="/chat" className="btn-ghost text-base">
+                Chat
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-4 justify-center">
+            <Link href="/session" className="btn-accent text-base">
+              {profile ? `Start Session #${profile.session_count + 1}` : "Start Session"}
             </Link>
-          )}
-        </div>
+            <Link href="/progress" className="btn-ghost text-base">
+              View Progress
+            </Link>
+            {profile && (
+              <Link href="/chat" className="btn-ghost text-base">
+                Chat
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* Feature pills */}
         <div className="flex gap-3 justify-center mt-16 flex-wrap">

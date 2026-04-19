@@ -10,6 +10,7 @@ import {
   listSessions,
   getActivePatientId,
   setActivePatientId,
+  deleteSession,
 } from "@/lib/api";
 
 function buildFormQualityData(sessions: SessionRecord[]): ChartDataPoint[] {
@@ -48,6 +49,26 @@ export default function ProgressPage() {
   // value narrows charts + totals + the list to sessions tagged with that
   // focus via `summary.focus`.
   const [activeFocus, setActiveFocus] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string, e: React.MouseEvent) {
+    // Stop the click from navigating to the session's report.
+    e.preventDefault();
+    e.stopPropagation();
+    if (deletingId) return;
+    if (!window.confirm("Delete this session? This cannot be undone.")) return;
+
+    setDeletingId(id);
+    const prev = sessions;
+    setSessions((s) => s.filter((x) => x.id !== id));
+    try {
+      await deleteSession(id);
+    } catch {
+      setSessions(prev);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -310,11 +331,13 @@ export default function ProgressPage() {
             <div className="flex flex-col gap-2">
               {[...filteredSessions].reverse().map((s) => {
                 const focus = (s.summary as { focus?: string } | null)?.focus ?? null;
+                const isDeleting = deletingId === s.id;
                 return (
                 <Link
                   key={s.id}
                   href={`/report/${s.id}`}
-                  className="glass-card p-4 flex items-center justify-between hover:border-[var(--color-border-bright)] transition-colors cursor-pointer"
+                  className="group glass-card p-4 flex items-center justify-between hover:border-[var(--color-border-bright)] transition-colors cursor-pointer"
+                  style={{ opacity: isDeleting ? 0.4 : 1, pointerEvents: isDeleting ? "none" : undefined }}
                 >
                   <div className="flex items-center gap-3">
                     {focus && (
@@ -355,6 +378,23 @@ export default function ProgressPage() {
                       </div>
                       <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>pain</div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(s.id, e)}
+                      disabled={isDeleting}
+                      aria-label={`Delete session ${s.session_number}`}
+                      title="Delete session"
+                      className="w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{
+                        background: "var(--color-surface-raised)",
+                        border: "1px solid var(--color-border)",
+                        color: "#ef4444",
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14M10 11v6M14 11v6"/>
+                      </svg>
+                    </button>
                     <span className="text-[var(--color-text-muted)] text-lg" aria-hidden>
                       &rsaquo;
                     </span>
