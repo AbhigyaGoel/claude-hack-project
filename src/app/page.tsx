@@ -10,6 +10,7 @@ import {
   logout,
   listSessions,
 } from "@/lib/api";
+import { focusForSession } from "@/lib/focusFromExercises";
 
 interface FocusEntry {
   focus: string;
@@ -59,7 +60,7 @@ export default function Home() {
           if (cancelled) return;
           const byFocus = new Map<string, FocusEntry>();
           for (const s of sessions) {
-            const f = (s.summary as { focus?: string } | null)?.focus;
+            const f = focusForSession(s);
             if (!f) continue;
             const existing = byFocus.get(f);
             if (!existing) {
@@ -184,16 +185,17 @@ export default function Home() {
           </div>
         )}
 
-        {/* Pain-point picker — one card per existing focus, plus a "new"
-            card that routes the session into a fresh intake. Falls back to
-            a single Start Session button when the patient has no history
-            yet. While we're still loading, show a spinner in the CTA slot
-            so the page doesn't flash through intermediate states. */}
+        {/* Pain-point picker — one "Continue" card per focus present in
+            the patient's history, plus a "New pain point" card that routes
+            the session into a fresh intake. New users land on the same
+            structure with only the New card visible. While bootstrapping,
+            show a spinner in the CTA slot to avoid flashing through
+            intermediate render states. */}
         {bootstrapping ? (
           <div className="flex justify-center py-4">
             <div className="spinner" />
           </div>
-        ) : profile && focuses.length > 0 ? (
+        ) : (
           <div className="flex flex-col gap-6">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {focuses.map((f) => {
@@ -237,16 +239,18 @@ export default function Home() {
                   className="text-[11px] uppercase tracking-[0.15em] mb-2"
                   style={{ color: "var(--color-accent)" }}
                 >
-                  Something else
+                  {focuses.length === 0 ? "Get started" : "Something else"}
                 </div>
                 <div
                   className="text-xl font-semibold mb-1"
                   style={{ color: "var(--color-text-primary)" }}
                 >
-                  New pain point
+                  {focuses.length === 0 ? "Start your first intake" : "New pain point"}
                 </div>
                 <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                  Run a fresh intake for a different region
+                  {focuses.length === 0
+                    ? "Vero will screen you and build your first program"
+                    : "Run a fresh intake for a different region"}
                 </div>
               </Link>
             </div>
@@ -255,24 +259,12 @@ export default function Home() {
               <Link href="/progress" className="btn-ghost text-base">
                 View Progress
               </Link>
-              <Link href="/chat" className="btn-ghost text-base">
-                Chat
-              </Link>
+              {profile && (
+                <Link href="/chat" className="btn-ghost text-base">
+                  Chat
+                </Link>
+              )}
             </div>
-          </div>
-        ) : (
-          <div className="flex gap-4 justify-center">
-            <Link href="/session" className="btn-accent text-base">
-              {profile ? `Start Session #${profile.session_count + 1}` : "Start Session"}
-            </Link>
-            <Link href="/progress" className="btn-ghost text-base">
-              View Progress
-            </Link>
-            {profile && (
-              <Link href="/chat" className="btn-ghost text-base">
-                Chat
-              </Link>
-            )}
           </div>
         )}
 
