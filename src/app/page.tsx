@@ -42,9 +42,6 @@ export default function Home() {
   // unauthenticated → patient-only → full-picker states while the
   // individual fetches resolve one-by-one.
   const [bootstrapping, setBootstrapping] = useState(true);
-  const [ptPhone, setPtPhone] = useState("");
-  const [ptPhoneSaving, setPtPhoneSaving] = useState(false);
-  const [ptPhoneSaved, setPtPhoneSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +54,6 @@ export default function Home() {
         if (cancelled) return;
         setUsername(user?.username ?? null);
         setProfile(p);
-        if (p?.pt_phone) setPtPhone(p.pt_phone);
 
         if (p) {
           const sessions = await listSessions(p.id).catch(() => [] as SessionRecord[]);
@@ -97,21 +93,6 @@ export default function Home() {
     };
   }, []);
 
-  async function savePtPhone() {
-    if (!profile) return;
-    setPtPhoneSaving(true);
-    try {
-      await fetch(`/api/patients/${profile.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pt_phone: ptPhone.trim() || null }),
-      });
-      setPtPhoneSaved(true);
-      setTimeout(() => setPtPhoneSaved(false), 2000);
-    } finally {
-      setPtPhoneSaving(false);
-    }
-  }
 
   async function handleLogout() {
     clearActivePatient();
@@ -189,9 +170,9 @@ export default function Home() {
           and adaptive coaching — all in your browser.
         </p>
 
-        {/* Active profile badge + PT phone */}
+        {/* Active profile badge */}
         {!bootstrapping && profile && (
-          <div className="mb-8 flex flex-col items-center gap-3">
+          <div className="mb-8 flex justify-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full" style={{
               background: "var(--color-surface-raised)",
               border: "1px solid var(--color-border)",
@@ -203,29 +184,6 @@ export default function Home() {
               <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
                 · {profile.session_count} session{profile.session_count !== 1 ? "s" : ""}
               </span>
-            </div>
-            {/* PT phone number — stored in DB, texted after each session */}
-            <div className="flex items-center gap-2">
-              <input
-                type="tel"
-                value={ptPhone}
-                onChange={(e) => setPtPhone(e.target.value)}
-                onBlur={savePtPhone}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
-                placeholder="PT's phone (e.g. +13105551234)"
-                className="text-xs px-3 py-1.5 rounded-lg w-52 focus:outline-none transition-colors"
-                style={{
-                  background: "var(--color-surface-raised)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text-secondary)",
-                }}
-              />
-              {ptPhoneSaving && (
-                <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>saving…</span>
-              )}
-              {ptPhoneSaved && (
-                <span className="text-[10px]" style={{ color: "var(--color-success)" }}>✓ saved</span>
-              )}
             </div>
           </div>
         )}
