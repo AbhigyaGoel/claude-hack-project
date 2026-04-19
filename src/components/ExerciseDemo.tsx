@@ -13,21 +13,27 @@ interface ReferencePoseData {
 
 interface ExerciseDemoProps {
   exerciseId: string;
+  exerciseName?: string;
   targetAngles?: Record<string, number>;
-  primaryJointAngle?: string;
+  cues?: string[];
+  tempoSeconds?: string;
 }
 
 /**
- * Reference pose playback renderer.
+ * Exercise demonstration component.
  *
- * Loads a pre-recorded keypoint timeseries from /reference-poses/{id}.json
- * and loops it using the same drawSkeleton renderer as the live user overlay.
- *
- * Falls back to a clean text-based instruction card when no reference data exists.
+ * Two modes:
+ * 1. Reference pose playback — loads pre-recorded keypoints, renders with
+ *    the same drawSkeleton as the live camera overlay. Identical visual.
+ * 2. Instruction card fallback — clean text-based guide with target angle,
+ *    tempo breakdown, and step-by-step cues. Actually useful.
  */
 export default function ExerciseDemo({
   exerciseId,
+  exerciseName,
   targetAngles,
+  cues,
+  tempoSeconds,
 }: ExerciseDemoProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,7 +42,7 @@ export default function ExerciseDemo({
   const rafRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
 
-  const [status, setStatus] = useState<"loading" | "playing" | "missing">("loading");
+  const [status, setStatus] = useState<"loading" | "playing" | "instruction">("loading");
 
   const toLandmarks = useCallback((raw: number[][]): Landmark[] => {
     return raw.map(([x, y, z, visibility]) => ({
@@ -66,32 +72,20 @@ export default function ExerciseDemo({
 
       ctx.fillStyle = "#060a0e";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       drawSkeleton(ctx, landmarks, canvas.width, canvas.height);
 
-      // "DEMO" badge
+      // DEMO badge
       ctx.font = "bold 10px system-ui";
       ctx.fillStyle = "rgba(56, 189, 195, 0.7)";
       ctx.fillText("DEMO", 8, 16);
-
-      // Target angle readout
-      if (targetAngles) {
-        const primaryKey = Object.keys(targetAngles)[0];
-        const targetVal = targetAngles[primaryKey];
-        if (primaryKey && targetVal) {
-          const label = primaryKey.replace(/_/g, " ").replace(" degrees", "°").replace(" cm", " cm");
-          ctx.font = "11px system-ui";
-          ctx.fillStyle = "rgba(255,255,255,0.5)";
-          ctx.fillText(`Target: ${label} ${targetVal}`, 8, canvas.height - 8);
-        }
-      }
 
       frameIndexRef.current = (frameIndexRef.current + 1) % data.frame_count;
     }
 
     rafRef.current = requestAnimationFrame(animate);
-  }, [toLandmarks, targetAngles]);
+  }, [toLandmarks]);
 
+  // Try loading reference pose, fall back to instruction card
   useEffect(() => {
     let cancelled = false;
 
@@ -99,12 +93,13 @@ export default function ExerciseDemo({
       try {
         const res = await fetch(`/reference-poses/${exerciseId}.json`);
         if (!res.ok) {
-          setStatus("missing");
+          if (!cancelled) setStatus("instruction");
           return;
         }
         const data: ReferencePoseData = await res.json();
-        if (cancelled || !data.landmarks?.length) {
-          if (!cancelled) setStatus("missing");
+        if (cancelled) return;
+        if (!data.landmarks?.length) {
+          setStatus("instruction");
           return;
         }
         poseDataRef.current = data;
@@ -112,7 +107,7 @@ export default function ExerciseDemo({
         lastFrameTimeRef.current = 0;
         setStatus("playing");
       } catch {
-        if (!cancelled) setStatus("missing");
+        if (!cancelled) setStatus("instruction");
       }
     }
 
@@ -120,10 +115,10 @@ export default function ExerciseDemo({
     return () => { cancelled = true; };
   }, [exerciseId]);
 
+  // Canvas setup + animation start
   useEffect(() => {
     if (status !== "playing") return;
 
-    // Size canvas for container
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (canvas && container) {
@@ -142,59 +137,88 @@ export default function ExerciseDemo({
     return () => cancelAnimationFrame(rafRef.current);
   }, [status, animate]);
 
-  // "Demo coming soon" — clean instructional fallback
-  if (status === "missing") {
-    const targetKey = targetAngles ? Object.keys(targetAngles)[0] : null;
-    const targetVal = targetKey ? targetAngles?.[targetKey] : null;
+  // --- Instruction card fallback ---
+  if (status === "instruction") {
+    const primaryKey = targetAngles ? Object.keys(targetAngles)[0] : null;
+    const targetVal = primaryKey ? targetAngles?.[primaryKey] : null;
+
+    // Parse tempo
+    const tempoParts = tempoSeconds?.split("-").map(Number) || [];
+    const tempoLabels = ["Up", "Hold", "Down", "Rest"];
 
     return (
       <div
-        className="rounded-xl flex flex-col items-center justify-center gap-3 py-6 px-4"
+        className="rounded-xl flex flex-col gap-3 p-4"
         style={{
           background: "var(--color-surface-raised)",
           border: "1px solid var(--color-border)",
-          minHeight: 140,
         }}
       >
-        <div className="flex items-center gap-2">
-          <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round">
-            <circle cx="12" cy="5" r="3" />
-            <path d="M12 8v8M8 12h8M12 16l-3 5M12 16l3 5" />
-          </svg>
-          <span className="text-xs font-medium" style={{ color: "var(--color-accent)" }}>
-            Follow the cues below
+        {/* Exercise name + target */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--color-accent)" }}>
+            {exerciseName || exerciseId.replace(/_/g, " ").replace(/\d+$/, "").trim()}
           </span>
+          {targetVal != null && primaryKey && (
+            <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
+              {formatAngleKey(primaryKey)}: {targetVal}{primaryKey.includes("cm") ? " cm" : "°"}
+            </span>
+          )}
         </div>
-        {targetVal && targetKey && (
-          <div className="text-center">
-            <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-              Target: {targetKey.replace(/_/g, " ").replace("degrees", "").trim()}
-            </span>
-            <span className="text-sm font-mono font-semibold ml-1" style={{ color: "var(--color-accent)" }}>
-              {targetVal}{targetKey.includes("cm") ? " cm" : "°"}
-            </span>
+
+        {/* Step-by-step cues */}
+        {cues && cues.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            {cues.map((cue, i) => (
+              <div key={i} className="flex gap-2 text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                <span
+                  className="w-4 h-4 rounded flex items-center justify-center shrink-0 text-[9px] font-mono font-bold"
+                  style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}
+                >
+                  {i + 1}
+                </span>
+                <span className="leading-relaxed">{cue}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tempo */}
+        {tempoParts.length >= 3 && (
+          <div className="flex gap-1.5 pt-1" style={{ borderTop: "1px solid var(--color-border)" }}>
+            {tempoParts.map((t, i) => (
+              <div key={i} className="flex-1 text-center py-1 rounded" style={{ background: "var(--color-surface)" }}>
+                <div className="text-xs font-mono font-semibold" style={{ color: "var(--color-accent)" }}>{t}s</div>
+                <div className="text-[8px]" style={{ color: "var(--color-text-muted)" }}>{tempoLabels[i]}</div>
+              </div>
+            ))}
           </div>
         )}
       </div>
     );
   }
 
+  // --- Reference pose playback ---
   return (
     <div
       ref={containerRef}
       className="relative rounded-xl overflow-hidden"
-      style={{
-        background: "#060a0e",
-        border: "1px solid var(--color-border)",
-        minHeight: 180,
-      }}
+      style={{ background: "#060a0e", border: "1px solid var(--color-border)", minHeight: 180 }}
     >
       {status === "loading" && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex items-center justify-center" style={{ minHeight: 180 }}>
           <div className="spinner" style={{ width: 20, height: 20 }} />
         </div>
       )}
-      <canvas ref={canvasRef} style={{ display: "block" }} />
+      <canvas ref={canvasRef} style={{ display: status === "playing" ? "block" : "none" }} />
     </div>
   );
+}
+
+function formatAngleKey(key: string): string {
+  return key
+    .replace(/_degrees$/, "")
+    .replace(/_cm$/, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }

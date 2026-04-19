@@ -23,7 +23,7 @@ export default function ExerciseGuide({
   targetAngle,
   phase,
 }: ExerciseGuideProps) {
-  const progress = Math.min(100, (currentAngle / targetAngle) * 100);
+  const progress = targetAngle > 0 ? Math.min(100, (currentAngle / targetAngle) * 100) : 0;
   const instruction = PHASE_INSTRUCTIONS[phase];
 
   return (
@@ -31,11 +31,13 @@ export default function ExerciseGuide({
       {/* Exercise demonstration */}
       <ExerciseDemo
         exerciseId={exercise.id}
+        exerciseName={exercise.name}
         targetAngles={exercise.target_angles}
-        primaryJointAngle={Object.keys(exercise.target_angles)[0]}
+        cues={exercise.cues}
+        tempoSeconds={exercise.tempo_seconds}
       />
 
-      {/* Live instruction */}
+      {/* Live phase instruction */}
       <div
         className="text-center py-3 rounded-xl text-sm font-semibold animate-fade-in"
         style={{
@@ -56,10 +58,7 @@ export default function ExerciseGuide({
             {Math.round(currentAngle)}° / {targetAngle}°
           </span>
         </div>
-        <div
-          className="h-2.5 rounded-full overflow-hidden"
-          style={{ background: "var(--color-surface-raised)" }}
-        >
+        <div className="h-2.5 rounded-full overflow-hidden" style={{ background: "var(--color-surface-raised)" }}>
           <div
             className="h-full rounded-full transition-all duration-150"
             style={{
@@ -74,28 +73,6 @@ export default function ExerciseGuide({
         </div>
       </div>
 
-      {/* How to do it */}
-      <div>
-        <p className="data-label mb-2">How to perform</p>
-        <ol className="space-y-1.5">
-          {exercise.cues.map((cue, i) => (
-            <li
-              key={i}
-              className="flex gap-2 text-sm leading-relaxed"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              <span
-                className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 text-[10px] font-mono font-semibold"
-                style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}
-              >
-                {i + 1}
-              </span>
-              {cue}
-            </li>
-          ))}
-        </ol>
-      </div>
-
       {/* Tempo guide */}
       <div className="flex items-center gap-3 pt-2" style={{ borderTop: "1px solid var(--color-border)" }}>
         <span className="data-label">Tempo</span>
@@ -103,17 +80,9 @@ export default function ExerciseGuide({
           {exercise.tempo_seconds.split("-").map((t, i) => {
             const labels = ["Up", "Hold", "Down", "Rest"];
             return (
-              <div
-                key={i}
-                className="flex flex-col items-center px-2 py-1 rounded-md"
-                style={{ background: "var(--color-surface-raised)" }}
-              >
-                <span className="font-mono text-xs font-semibold" style={{ color: "var(--color-accent)" }}>
-                  {t}s
-                </span>
-                <span className="text-[9px]" style={{ color: "var(--color-text-muted)" }}>
-                  {labels[i]}
-                </span>
+              <div key={i} className="flex flex-col items-center px-2 py-1 rounded-md" style={{ background: "var(--color-surface-raised)" }}>
+                <span className="font-mono text-xs font-semibold" style={{ color: "var(--color-accent)" }}>{t}s</span>
+                <span className="text-[9px]" style={{ color: "var(--color-text-muted)" }}>{labels[i]}</span>
               </div>
             );
           })}

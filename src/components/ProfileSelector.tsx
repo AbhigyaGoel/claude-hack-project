@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { StoredProfile } from "@/types/storage";
 import { getProfiles, saveProfile, deleteProfile, setActiveProfileId } from "@/lib/storage";
 
@@ -10,9 +10,16 @@ interface ProfileSelectorProps {
 }
 
 export default function ProfileSelector({ onSelect, onCreateNew }: ProfileSelectorProps) {
-  const [profiles, setProfiles] = useState(() => getProfiles());
+  const [profiles, setProfiles] = useState<StoredProfile[]>([]);
+  const [mounted, setMounted] = useState(false);
   const [showNameInput, setShowNameInput] = useState(false);
   const [name, setName] = useState("");
+
+  // Load profiles after mount to avoid SSR hydration mismatch
+  useEffect(() => {
+    setProfiles(getProfiles());
+    setMounted(true);
+  }, []);
 
   function handleDelete(id: string) {
     deleteProfile(id);
@@ -22,6 +29,14 @@ export default function ProfileSelector({ onSelect, onCreateNew }: ProfileSelect
   function handleSelect(profile: StoredProfile) {
     setActiveProfileId(profile.id);
     onSelect(profile);
+  }
+
+  if (!mounted) {
+    return (
+      <div className="glass-card p-8 max-w-md mx-auto text-center">
+        <div className="spinner mx-auto" />
+      </div>
+    );
   }
 
   if (profiles.length === 0 && !showNameInput) {
