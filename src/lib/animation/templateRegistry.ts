@@ -10,6 +10,9 @@ import {
   pendulum,
   shrug,
   crossBody,
+  supineArmRaise,
+  sidelyingER,
+  proneArmRaise,
 } from "./templates/shoulder";
 
 // Knee templates
@@ -64,25 +67,25 @@ import {
 const EXACT_MATCH: Record<string, MovementTemplate> = {
   // Shoulder
   wall_slide_01: overheadReach,
-  shoulder_flexion_supine_01: overheadReach,
+  shoulder_flexion_supine_01: supineArmRaise,
   pendulum_01: pendulum,
-  external_rotation_sidelying_01: externalRotation,
+  external_rotation_sidelying_01: sidelyingER,
   scapular_retraction_01: scapularSqueeze,
   shoulder_abduction_standing_01: lateralRaise,
-  prone_y_raise_01: overheadReach,
+  prone_y_raise_01: proneArmRaise,
   internal_rotation_band_01: internalRotation,
   cross_body_stretch_01: crossBody,
   doorway_pec_stretch_01: crossBody,
   isometric_external_rotation_01: externalRotation,
   shoulder_shrug_01: shrug,
-  prone_t_raise_01: lateralRaise,
-  prone_w_raise_01: externalRotation,
+  prone_t_raise_01: proneArmRaise,
+  prone_w_raise_01: proneArmRaise,
   external_rotation_band_90_01: externalRotation,
   overhead_press_seated_01: overheadReach,
   scapular_push_up_01: scapularSqueeze,
   shoulder_er_standing_band_01: externalRotation,
   wall_angel_01: overheadReach,
-  sleeper_stretch_01: internalRotation,
+  sleeper_stretch_01: supineArmRaise,
 
   // Knee
   quad_set_01: kneeExtension,
@@ -146,7 +149,7 @@ const EXACT_MATCH: Record<string, MovementTemplate> = {
   cervical_rotation_rom_01: neckRotation,
   levator_scapulae_stretch_01: neckLateralFlex,
   upper_trap_stretch_01: neckLateralFlex,
-  thoracic_extension_seated_01: pressUp,
+  thoracic_extension_seated_01: chinTuck,
   scapular_retraction_cervical_01: scapularSqueeze,
   wall_angel_cervical_01: overheadReach,
   prone_cervical_retraction_01: chinTuck,

@@ -175,6 +175,59 @@ export const shrug: MovementTemplate = {
 };
 
 /**
+ * Supine arm raise: lying on back, one arm lifts overhead.
+ * Used for: shoulder_flexion_supine, sleeper_stretch
+ */
+export const supineArmRaise: MovementTemplate = {
+  basePose: "supine",
+  activeJoints: [11, 13, 15],
+  description: "Lying on back, arm raises overhead",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("supine"));
+    // Left arm rotates from resting at side to overhead
+    const angle = easeInOutSine(t) * -130;
+    rotateJointsAround(pose, 11, LEFT_ARM, angle);
+    return pose;
+  },
+};
+
+/**
+ * Sidelying external rotation: lying on side, forearm rotates up.
+ * Used for: external_rotation_sidelying
+ */
+export const sidelyingER: MovementTemplate = {
+  basePose: "sidelying",
+  activeJoints: [14, 16],
+  description: "Lying on side, forearm rotates upward",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("sidelying"));
+    // Upper arm at side, elbow bent 90, forearm rotates
+    const angle = easeInOutSine(t) * -60;
+    rotateJointsAround(pose, 14, [16, 18, 20, 22], angle);
+    return pose;
+  },
+};
+
+/**
+ * Prone arm raise: face down, arms lift in Y/T pattern.
+ * Used for: prone_y_raise, prone_t_raise, prone_w_raise
+ */
+export const proneArmRaise: MovementTemplate = {
+  basePose: "prone",
+  activeJoints: [11, 12, 13, 14],
+  description: "Lying face down, arms lift upward",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("prone"));
+    const lift = easeInOutSine(t) * -0.08;
+    // Both arms lift
+    for (const idx of [...LEFT_ARM, ...RIGHT_ARM]) {
+      pose[idx] = { ...pose[idx], y: pose[idx].y + lift };
+    }
+    return pose;
+  },
+};
+
+/**
  * Cross-body stretch: arm reaches across the chest.
  * Used for: cross_body_stretch
  */
