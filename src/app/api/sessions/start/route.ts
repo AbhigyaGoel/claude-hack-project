@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     patient_id?: string;
     plan_id?: string | null;
     pain_pre?: number | null;
+    focus?: string | null;
   };
 
   if (!body.patient_id) {
@@ -40,6 +41,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "patient not found" }, { status: 404 });
   }
 
+  // Tag the focus up-front so sessions that the user exits before any
+  // rep completes still carry a region label (otherwise they'd show up
+  // on /progress with no pill and be unfilterable).
+  const initialSummary =
+    typeof body.focus === "string" && body.focus.length > 0
+      ? { focus: body.focus }
+      : null;
+
   const [row] = await db
     .insert(sessions)
     .values({
@@ -48,6 +57,7 @@ export async function POST(req: NextRequest) {
       user_id: userId,
       started_at: new Date(),
       pain_pre: body.pain_pre ?? null,
+      summary_json: initialSummary,
     })
     .returning({
       id: sessions.id,

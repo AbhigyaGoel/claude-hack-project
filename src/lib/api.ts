@@ -102,6 +102,7 @@ export async function startSession(input: {
   patient_id: string;
   plan_id?: string | null;
   pain_pre?: number | null;
+  focus?: string | null;
 }): Promise<{ id: string; started_at: string | null }> {
   const res = await fetch("/api/sessions/start", {
     method: "POST",

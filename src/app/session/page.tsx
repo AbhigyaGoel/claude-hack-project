@@ -466,13 +466,18 @@ export default function SessionPage() {
     );
 
     // Create the sessions row NOW so every per-rep write can reference a
-    // real session_id instead of null.
+    // real session_id instead of null. Tag the focus up-front from the
+    // plan so an early-exit row still carries a region label.
     if (activeProfile) {
+      const plannedFocus = plan
+        ? deriveFocusFromExercises(plan.exercises.map((e) => e.id))
+        : null;
       try {
         const started = await startSession({
           patient_id: activeProfile.id,
           plan_id: null,
           pain_pre: value,
+          focus: plannedFocus,
         });
         sessionIdRef.current = started.id;
         logVeroOk(`✅ Created sessions row (id=${started.id}) — rep commentary will carry this session_id`);
