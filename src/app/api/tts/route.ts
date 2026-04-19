@@ -14,16 +14,28 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "ELEVENLABS API key not configured" }), { status: 500 });
   }
 
-  const { text, voiceId, stability = 0.5, similarityBoost = 0.75 } = await req.json() as {
+  const {
+    text,
+    voiceId,
+    stability = 0.5,
+    similarityBoost = 0.75,
+    // Speed is clamped to ElevenLabs' supported range [0.7, 1.2].
+    // Default of 1.15 is noticeably snappier than 1.0 without sounding alien
+    // and pairs well with the observer's short one-line cues.
+    speed = 1.15,
+  } = (await req.json()) as {
     text: string;
     voiceId?: string;
     stability?: number;
     similarityBoost?: number;
+    speed?: number;
   };
 
   if (!text) {
     return new Response(JSON.stringify({ error: "text is required" }), { status: 400 });
   }
+
+  const clampedSpeed = Math.max(0.7, Math.min(1.2, speed));
 
   const response = await fetch(
     `${ELEVENLABS_BASE}/text-to-speech/${voiceId ?? DEFAULT_VOICE_ID}`,
@@ -37,7 +49,11 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         text,
         model_id: "eleven_flash_v2_5",
-        voice_settings: { stability, similarity_boost: similarityBoost },
+        voice_settings: {
+          stability,
+          similarity_boost: similarityBoost,
+          speed: clampedSpeed,
+        },
       }),
     },
   );
