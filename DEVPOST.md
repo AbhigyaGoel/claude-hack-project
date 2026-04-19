@@ -57,6 +57,8 @@ With an 800ms minimum duration filter to reject noise.
 
 **Agent overcorrection.** Our first safety monitor flagged false positives on nearly every frame ("lateral lean detected," "possible fall risk") when the patient was just standing normally. We learned that more agents doesn't mean better: we cut the safety monitor and cue generator entirely, letting the Form Observer handle spoken feedback. Fewer, better agents beat many noisy ones.
 
+**ElevenLabs latency in a real-time loop.** Integrating ElevenLabs TTS into the per-rep pipeline exposed a core tension: the Form Observer generates a coaching cue from a live webcam frame, but TTS synthesis added 800ms–1.2s of round-trip latency on top of the Claude call. If the patient was already mid-next-rep, the cue arrived late and felt disjointed. We solved this by firing TTS asynchronously and capping cue text at 15 words — short enough that synthesis finished within the rest beat between reps. We also stripped leading `[emotion]` tags from cue strings before sending to ElevenLabs, since the API rejected tagged input that the model kept producing despite prompting.
+
 ## Accomplishments that we're proud of
 
 - **The SOAP pipeline actually works.** Observer $\to$ Reasoner $\to$ Coach produces clinically coherent notes that flow from objective observation through assessment to plan, the same structure real PTs use in their documentation.
@@ -76,6 +78,7 @@ With an 800ms minimum duration filter to reject noise.
 **MediaPipe is good enough.** 33-keypoint BlazePose at 30fps in-browser WASM gives you enough signal for rep counting and basic compensation detection. You don't need depth cameras or server-side pose estimation for rehab-grade analysis. The webcam in your laptop is sufficient.
 
 **Structured prompts with clinical frameworks beat generic instructions.** The SINSS framework, OPQRST interview structure, and body-region-specific skill files gave agents clinically grounded reasoning instead of generic health advice. Domain knowledge in the prompt is worth more than model size.
+
 
 
 ## What's next for Vero
