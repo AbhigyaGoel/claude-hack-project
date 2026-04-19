@@ -4,6 +4,22 @@ import { getDb } from "@/db";
 import { sessions, sets, formEvents, patients, plans } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
+/**
+ * Shape check for a cached `sessions.summary_json`. The seed writes a small
+ * `{focus, note}` stub which we must NOT treat as a cached report — only the
+ * full SessionReport shape should short-circuit generation.
+ */
+function isCachedReport(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.title === "string" &&
+    typeof v.patient_name === "string" &&
+    Array.isArray(v.sections) &&
+    Array.isArray(v.recommendations)
+  );
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { session_id } = body;
@@ -19,6 +35,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
   const session = sessionRows[0];
+
+  // Fast path: if a full report has already been generated and stored,
+  // return it directly. Avoids a 5–10s Opus round-trip on every re-view.
+  if (isCachedReport(session.summary_json)) {
+    return NextResponse.json({
+      ...(session.summary_json as Record<string, unknown>),
+      patient_id: session.patient_id,
+    });
+  }
 
   const patientRows = await db.select().from(patients).where(eq(patients.id, session.patient_id));
   const patient = (patientRows[0]?.profile_json as { name?: string } | null) ?? null;
@@ -62,7 +87,7 @@ export async function POST(req: NextRequest) {
       .set({ summary_json: report })
       .where(eq(sessions.id, session_id));
 
-    return NextResponse.json(report);
+    return NextResponse.json({ ...report, patient_id: session.patient_id });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Report generation failed" },

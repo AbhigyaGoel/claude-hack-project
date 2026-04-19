@@ -42,11 +42,10 @@ function WebcamLoading() {
   );
 }
 
-type SessionStep = "loading" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
+type SessionStep = "loading" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
 
 const STEP_LABELS: Record<SessionStep, string> = {
   loading: "Loading",
-  returning: "Welcome Back",
   intake: "Diagnostic Intake",
   pre_pain: "Pre-Session Rating",
   exercising: "Exercise Session",
@@ -91,15 +90,24 @@ export default function SessionPage() {
 
   const currentExercise = plan?.exercises[currentExerciseIndex];
 
-  // Check for existing active patient on mount.
+  // Check for existing active patient on mount. A cleared returning patient
+  // skips the "welcome back" confirmation and goes straight into the session
+  // — the demo flow has a single seeded patient, so the picker adds friction
+  // without offering real choice.
   useEffect(() => {
     let cancelled = false;
     getActivePatient()
       .then((profile) => {
         if (cancelled) return;
-        if (profile) {
+        if (profile?.profile?.diagnostic?.cleared_for_exercise) {
           setActiveProfile(profile);
-          setStep(profile.profile?.diagnostic?.cleared_for_exercise ? "returning" : "intake");
+          const dx = profile.profile.diagnostic;
+          setDiagnostic(dx);
+          buildPlanFromDiagnostic(dx, profile.session_count + 1);
+          setStep("pre_pain");
+        } else if (profile) {
+          setActiveProfile(profile);
+          setStep("intake");
         } else {
           setStep("intake");
         }
@@ -111,18 +119,6 @@ export default function SessionPage() {
       cancelled = true;
     };
   }, []);
-
-  function handleContinueAsReturning() {
-    if (!activeProfile?.profile?.diagnostic) return;
-    const dx = activeProfile.profile.diagnostic;
-    setDiagnostic(dx);
-    buildPlanFromDiagnostic(dx, activeProfile.session_count + 1);
-    setStep("pre_pain");
-  }
-
-  function handleNewIntake() {
-    setStep("intake");
-  }
 
   function buildPlanFromDiagnostic(result: DiagnosticResult, sessionNumber: number) {
     const exercises = queryExercises({
@@ -293,12 +289,21 @@ export default function SessionPage() {
 
   async function handlePostPain(value: number) {
     setPainPost(value);
-    await persistSession(value);
-    setStep("summary");
+    const savedId = await persistSession(value);
+    // Route straight into the report. The report page renders a
+    // "Generating session report..." loader while /api/report is running,
+    // so the user never sees an intermediate summary stub. If persistence
+    // failed (savedId null), fall back to the summary step so the workout
+    // data isn't silently lost.
+    if (savedId) {
+      router.push(`/report/${savedId}?from=session`);
+    } else {
+      setStep("summary");
+    }
   }
 
-  async function persistSession(postPain: number) {
-    if (!plan || !activeProfile || painPre === null) return;
+  async function persistSession(postPain: number): Promise<string | null> {
+    if (!plan || !activeProfile || painPre === null) return null;
 
     const startedAt = new Date(sessionStartRef.current).toISOString();
     const endedAt = new Date().toISOString();
@@ -337,8 +342,10 @@ export default function SessionPage() {
 
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });
+      return saved.id;
     } catch {
       // Persistence failure is non-fatal for the in-memory summary view.
+      return null;
     }
   }
 
@@ -488,23 +495,6 @@ export default function SessionPage() {
       {step === "loading" && (
         <div className="flex-1 flex items-center justify-center">
           <div className="spinner" />
-        </div>
-      )}
-
-      {/* Returning User */}
-      {step === "returning" && activeProfile && (
-        <div className="flex-1 flex items-center justify-center animate-fade-in">
-          <div className="glass-card-bright p-8 max-w-md text-center">
-            <h2 className="text-xl font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>Welcome back, {activeProfile.name}</h2>
-            <p className="text-sm mb-1" style={{ color: "var(--color-text-secondary)" }}>
-              {activeProfile.profile?.diagnostic?.body_region ?? "general"} program
-            </p>
-            <p className="text-xs mb-6" style={{ color: "var(--color-text-muted)" }}>{activeProfile.session_count} session{activeProfile.session_count !== 1 ? "s" : ""} completed</p>
-            <div className="flex gap-3 justify-center">
-              <button onClick={handleContinueAsReturning} className="btn-accent">Continue Program</button>
-              <button onClick={handleNewIntake} className="btn-ghost text-sm">New Assessment</button>
-            </div>
-          </div>
         </div>
       )}
 

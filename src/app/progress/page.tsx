@@ -85,8 +85,39 @@ export default function ProgressPage() {
     ? Math.round(sessions.reduce((sum, s) => sum + s.avg_form_quality, 0) / totalSessions)
     : 0;
   const totalMinutes = sessions.reduce((sum, s) => sum + s.duration_minutes, 0);
-  const bodyRegion =
+
+  // Derive the program label from the session focuses when present (seeded
+  // sessions carry `summary.focus`). Multi-region cases show the union of
+  // focuses so Riley's knee / shoulder / lumbar history reads truthfully
+  // instead of a single-region label from the diagnostic.
+  const focuses = Array.from(
+    new Set(
+      sessions
+        .map((s) => (s.summary as { focus?: string } | null)?.focus)
+        .filter((f): f is string => typeof f === "string" && f.length > 0),
+    ),
+  );
+  const primaryRegion =
     selectedProfile?.profile?.diagnostic?.body_region ?? "general";
+  const programLabel =
+    focuses.length > 1
+      ? `${focuses.join(" · ")} program`
+      : `${primaryRegion} program`;
+
+  const focusColor = (focus: string): string => {
+    switch (focus.toLowerCase()) {
+      case "knee":
+        return "#38bdc3";
+      case "shoulder":
+        return "#a78bfa";
+      case "lumbar":
+        return "#f97316";
+      case "integrated":
+        return "#22c55e";
+      default:
+        return "var(--color-text-muted)";
+    }
+  };
 
   return (
     <main className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto" style={{ background: "var(--color-background)" }}>
@@ -128,7 +159,7 @@ export default function ProgressPage() {
             {selectedProfile.name}
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-            {bodyRegion} program · {totalSessions} session{totalSessions !== 1 ? "s" : ""}
+            {programLabel} · {totalSessions} session{totalSessions !== 1 ? "s" : ""}
           </p>
         </div>
       )}
@@ -223,17 +254,34 @@ export default function ProgressPage() {
               Session History
             </h3>
             <div className="flex flex-col gap-2">
-              {[...sessions].reverse().map((s) => (
-                <div
+              {[...sessions].reverse().map((s) => {
+                const focus = (s.summary as { focus?: string } | null)?.focus ?? null;
+                return (
+                <Link
                   key={s.id}
-                  className="glass-card p-4 flex items-center justify-between"
+                  href={`/report/${s.id}`}
+                  className="glass-card p-4 flex items-center justify-between hover:border-[var(--color-border-bright)] transition-colors cursor-pointer"
                 >
-                  <div>
-                    <div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
-                      Session {s.session_number}
-                    </div>
-                    <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                      {s.date ? new Date(s.date).toLocaleDateString() : ""} · {s.duration_minutes}min · {s.exercises.length} exercises
+                  <div className="flex items-center gap-3">
+                    {focus && (
+                      <span
+                        className="text-[10px] uppercase tracking-wide px-2 py-1 rounded-full shrink-0"
+                        style={{
+                          background: "var(--color-surface-raised)",
+                          border: `1px solid ${focusColor(focus)}40`,
+                          color: focusColor(focus),
+                        }}
+                      >
+                        {focus}
+                      </span>
+                    )}
+                    <div>
+                      <div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+                        Session {s.session_number}
+                      </div>
+                      <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                        {s.date ? new Date(s.date).toLocaleDateString() : ""} · {s.duration_minutes}min · {s.exercises.length} exercises
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -253,9 +301,13 @@ export default function ProgressPage() {
                       </div>
                       <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>pain</div>
                     </div>
+                    <span className="text-[var(--color-text-muted)] text-lg" aria-hidden>
+                      &rsaquo;
+                    </span>
                   </div>
-                </div>
-              ))}
+                </Link>
+                );
+              })}
             </div>
           </div>
         </div>

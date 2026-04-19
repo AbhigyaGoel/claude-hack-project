@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ProgressChart from "@/components/ProgressChart";
 import type { ChartDataPoint } from "@/agents/progressAnalyst";
 
@@ -21,6 +21,7 @@ interface ReportData {
   title: string;
   date: string;
   patient_name: string;
+  patient_id?: string;
   session_number?: number;
   overall_score?: number;
   sections: ReadonlyArray<ReportSection>;
@@ -38,6 +39,12 @@ interface ReportData {
     mcid_achieved: boolean;
   };
 }
+
+const SUGGESTED_QUESTIONS: readonly string[] = [
+  "Why did you program these exercises?",
+  "What was my biggest improvement?",
+  "What should I work on before the next session?",
+];
 
 interface ChatMessage {
   readonly role: "user" | "assistant";
@@ -71,7 +78,12 @@ function transformChartData(
 
 export default function ReportPage() {
   const params = useParams();
+  const router = useRouter();
   const sessionId = params.id as string;
+
+  const closeToProgress = useCallback(() => {
+    router.push("/progress");
+  }, [router]);
 
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,52 +128,65 @@ export default function ReportPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  const sendChatMessage = async () => {
-    const trimmed = chatInput.trim();
-    if (!trimmed || chatLoading) return;
+  const sendChatMessage = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || chatLoading) return;
+      const patientId = report?.patient_id;
+      if (!patientId) return;
 
-    const userMessage: ChatMessage = { role: "user", content: trimmed };
-    setChatMessages((prev) => [...prev, userMessage]);
-    setChatInput("");
-    setChatLoading(true);
+      const userMessage: ChatMessage = { role: "user", content: trimmed };
+      setChatMessages((prev) => [...prev, userMessage]);
+      setChatInput("");
+      setChatLoading(true);
 
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patient_id: sessionId,
-          message: trimmed,
-        }),
-      });
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patient_id: patientId,
+            message: trimmed,
+          }),
+        });
 
-      if (!res.ok) {
-        throw new Error("Chat request failed");
+        if (!res.ok) {
+          throw new Error("Chat request failed");
+        }
+
+        const data = await res.json();
+        const assistantMessage: ChatMessage = {
+          role: "assistant",
+          content: data.response ?? "I'm sorry, I couldn't process that.",
+        };
+        setChatMessages((prev) => [...prev, assistantMessage]);
+      } catch {
+        const errorMessage: ChatMessage = {
+          role: "assistant",
+          content: "Sorry, something went wrong. Please try again.",
+        };
+        setChatMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setChatLoading(false);
       }
-
-      const data = await res.json();
-      const assistantMessage: ChatMessage = {
-        role: "assistant",
-        content: data.response ?? "I'm sorry, I couldn't process that.",
-      };
-      setChatMessages((prev) => [...prev, assistantMessage]);
-    } catch {
-      const errorMessage: ChatMessage = {
-        role: "assistant",
-        content: "Sorry, something went wrong. Please try again.",
-      };
-      setChatMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
+    },
+    [chatLoading, report?.patient_id],
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendChatMessage();
+      sendChatMessage(chatInput);
     }
   };
+
+  const downloadPdf = useCallback(() => {
+    window.open(
+      `/api/report/pdf?session_id=${encodeURIComponent(sessionId)}`,
+      "_blank",
+      "noopener",
+    );
+  }, [sessionId]);
 
   if (loading) {
     return (
@@ -208,14 +233,32 @@ export default function ReportPage() {
               {formatDate(report.date)}
             </p>
           </div>
-          {report.overall_score != null && (
-            <div className="text-center">
-              <span className="data-label">Overall Score</span>
-              <p className="text-3xl font-mono font-bold text-[var(--color-accent)]">
-                {report.overall_score}
-              </p>
-            </div>
-          )}
+          <div className="flex items-start gap-4">
+            {report.overall_score != null && (
+              <div className="text-center">
+                <span className="data-label">Overall Score</span>
+                <p className="text-3xl font-mono font-bold text-[var(--color-accent)]">
+                  {report.overall_score}
+                </p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={downloadPdf}
+              className="btn-ghost text-sm px-3 py-2"
+              aria-label="Download PDF"
+            >
+              Download PDF
+            </button>
+            <button
+              type="button"
+              onClick={closeToProgress}
+              className="btn-ghost text-sm px-3 py-2"
+              aria-label="Close report and go to progress"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </header>
 
@@ -374,6 +417,28 @@ export default function ReportPage() {
           </div>
         )}
 
+        {/* Suggested questions — only while the conversation is empty, to
+            offer a starting point without crowding the input once a back-
+            and-forth begins. */}
+        {chatMessages.length === 0 && (
+          <div className="mx-4 sm:mx-auto sm:max-w-4xl pt-3 pb-1 flex flex-wrap gap-2">
+            <span className="text-xs text-[var(--color-text-muted)] self-center mr-1">
+              Ask your report:
+            </span>
+            {SUGGESTED_QUESTIONS.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => sendChatMessage(q)}
+                disabled={chatLoading || !report.patient_id}
+                className="text-xs px-3 py-1.5 rounded-full bg-[var(--color-surface-raised)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-bright)] transition-colors disabled:opacity-50"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Input row */}
         <div className="mx-4 sm:mx-auto sm:max-w-4xl py-3 flex gap-2">
           <input
@@ -381,13 +446,13 @@ export default function ReportPage() {
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about your report... e.g. &quot;Why split squats?&quot;"
-            disabled={chatLoading}
+            placeholder="Ask anything about your report..."
+            disabled={chatLoading || !report.patient_id}
             className="flex-1 bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-border-bright)] transition-colors"
           />
           <button
-            onClick={sendChatMessage}
-            disabled={chatLoading || !chatInput.trim()}
+            onClick={() => sendChatMessage(chatInput)}
+            disabled={chatLoading || !chatInput.trim() || !report.patient_id}
             className="btn-accent px-5 py-3 text-sm"
           >
             Send

@@ -58,15 +58,28 @@ const TRANSITION_MESSAGE = "Great, let's move on.";
 
 type IntakeStep = "region" | "red_flags" | "assessment" | "complete";
 
-/** Front-view anatomical silhouette with clickable region hot-spots. */
+/** Front-view anatomical silhouette with clickable region hot-spots.
+ *  Accepts optional `hoveredRegion` to highlight a body part from outside
+ *  (e.g. when the user hovers a named pill in the parent list).
+ */
 function BodySilhouette({
   regions,
   onSelect,
+  hoveredRegion: externalHover,
+  onHoverChange,
 }: {
   regions: BodyRegion[];
   onSelect: (region: BodyRegion) => void;
+  hoveredRegion?: BodyRegion | null;
+  onHoverChange?: (r: BodyRegion | null) => void;
 }) {
-  const [hovered, setHovered] = useState<BodyRegion | null>(null);
+  const [internalHover, setInternalHover] = useState<BodyRegion | null>(null);
+  const hovered = externalHover ?? internalHover;
+
+  const setHover = (r: BodyRegion | null) => {
+    setInternalHover(r);
+    onHoverChange?.(r);
+  };
 
   const HOTSPOTS: Record<BodyRegion, { cx: number; cy: number; label: string }> = {
     cervical: { cx: 110, cy: 76, label: "Neck" },
@@ -75,6 +88,31 @@ function BodySilhouette({
     hip: { cx: 110, cy: 290, label: "Hip" },
     knee: { cx: 88, cy: 408, label: "Knee" },
     ankle: { cx: 88, cy: 502, label: "Ankle" },
+  };
+
+  // Anatomical highlight shapes — bilateral where applicable.
+  const HIGHLIGHTS: Record<BodyRegion, React.ReactNode> = {
+    cervical: <ellipse cx={110} cy={75} rx={11} ry={12} />,
+    shoulder: (
+      <>
+        <ellipse cx={70} cy={100} rx={15} ry={11} />
+        <ellipse cx={150} cy={100} rx={15} ry={11} />
+      </>
+    ),
+    lumbar: <ellipse cx={110} cy={235} rx={38} ry={20} />,
+    hip: <ellipse cx={110} cy={285} rx={42} ry={14} />,
+    knee: (
+      <>
+        <ellipse cx={88} cy={408} rx={16} ry={12} />
+        <ellipse cx={142} cy={408} rx={16} ry={12} />
+      </>
+    ),
+    ankle: (
+      <>
+        <ellipse cx={84} cy={500} rx={11} ry={10} />
+        <ellipse cx={136} cy={500} rx={11} ry={10} />
+      </>
+    ),
   };
 
   return (
@@ -92,6 +130,9 @@ function BodySilhouette({
         </linearGradient>
         <filter id="bodyShadow" x="-20%" y="-10%" width="140%" height="120%">
           <feGaussianBlur stdDeviation="3" />
+        </filter>
+        <filter id="regionGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" />
         </filter>
       </defs>
 
@@ -204,6 +245,33 @@ function BodySilhouette({
         />
       </g>
 
+      {/* Region highlight — body part lights up when its hot-spot or pill is hovered */}
+      {hovered && (
+        <>
+          {/* Soft outer glow */}
+          <g
+            fill="var(--color-accent)"
+            opacity="0.45"
+            filter="url(#regionGlow)"
+            style={{ pointerEvents: "none" }}
+            className="animate-fade-in"
+          >
+            {HIGHLIGHTS[hovered]}
+          </g>
+          {/* Inner crisp tint */}
+          <g
+            fill="var(--color-accent)"
+            opacity="0.35"
+            stroke="var(--color-accent)"
+            strokeWidth="1"
+            style={{ pointerEvents: "none" }}
+            className="animate-fade-in"
+          >
+            {HIGHLIGHTS[hovered]}
+          </g>
+        </>
+      )}
+
       {/* Hot-spots */}
       {regions.map((r) => {
         const spot = HOTSPOTS[r];
@@ -213,8 +281,8 @@ function BodySilhouette({
             key={r}
             className="cursor-pointer"
             onClick={() => onSelect(r)}
-            onMouseEnter={() => setHovered(r)}
-            onMouseLeave={() => setHovered(null)}
+            onMouseEnter={() => setHover(r)}
+            onMouseLeave={() => setHover(null)}
           >
             {/* Larger invisible hit target */}
             <circle cx={spot.cx} cy={spot.cy} r="20" fill="transparent" />
@@ -294,6 +362,61 @@ function BodySilhouette({
         );
       })}
     </svg>
+  );
+}
+
+/** Region picker: body diagram + named pill list, with bidirectional hover sync. */
+function RegionPicker({ onSelect }: { onSelect: (region: BodyRegion) => void }) {
+  const [hovered, setHovered] = useState<BodyRegion | null>(null);
+
+  return (
+    <div className="animate-fade-in">
+      <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+        Where does it hurt?
+      </h2>
+      <p className="text-sm mb-5" style={{ color: "var(--color-text-muted)" }}>
+        Tap the body diagram or pick from the list.
+      </p>
+      <div className="grid grid-cols-[auto_1fr] gap-6 items-center">
+        <BodySilhouette
+          regions={BODY_REGIONS.map((r) => r.value)}
+          onSelect={onSelect}
+          hoveredRegion={hovered}
+          onHoverChange={setHovered}
+        />
+        <div className="grid grid-cols-1 gap-2 stagger-children">
+          {BODY_REGIONS.map((region) => {
+            const isActive = hovered === region.value;
+            return (
+              <button
+                key={region.value}
+                onClick={() => onSelect(region.value)}
+                onMouseEnter={() => setHovered(region.value)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => setHovered(region.value)}
+                onBlur={() => setHovered(null)}
+                className="px-4 py-2.5 rounded-lg text-left text-sm font-medium transition-all duration-200 flex items-center justify-between gap-3"
+                style={{
+                  background: isActive ? "var(--color-accent-glow)" : "var(--color-surface-raised)",
+                  border: `1px solid ${isActive ? "var(--color-accent)" : "var(--color-border)"}`,
+                  color: "var(--color-text-primary)",
+                  transform: isActive ? "translateX(2px)" : undefined,
+                }}
+              >
+                <span>{region.label}</span>
+                <span
+                  className="w-1.5 h-1.5 rounded-full transition-opacity duration-200"
+                  style={{
+                    background: "var(--color-accent)",
+                    opacity: isActive ? 1 : 0,
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -571,44 +694,9 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
       </div>
 
       {step === "region" && (
-        <div className="animate-fade-in">
-          <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
-            Where does it hurt?
-          </h2>
-          <p className="text-sm mb-5" style={{ color: "var(--color-text-muted)" }}>
-            Tap the body diagram or pick from the list.
-          </p>
-          <div className="grid grid-cols-[auto_1fr] gap-6 items-center">
-            <BodySilhouette
-              regions={BODY_REGIONS.map((r) => r.value)}
-              onSelect={handleRegionSelect}
-            />
-            <div className="grid grid-cols-1 gap-2 stagger-children">
-              {BODY_REGIONS.map((region) => (
-                <button
-                  key={region.value}
-                  onClick={() => handleRegionSelect(region.value)}
-                  className="px-4 py-2.5 rounded-lg text-left text-sm font-medium transition-all duration-200"
-                  style={{
-                    background: "var(--color-surface-raised)",
-                    border: "1px solid var(--color-border)",
-                    color: "var(--color-text-primary)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "var(--color-accent)";
-                    e.currentTarget.style.background = "var(--color-accent-glow)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "var(--color-border)";
-                    e.currentTarget.style.background = "var(--color-surface-raised)";
-                  }}
-                >
-                  {region.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <RegionPicker
+          onSelect={handleRegionSelect}
+        />
       )}
 
       {step === "red_flags" && (
