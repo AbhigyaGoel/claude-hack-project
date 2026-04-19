@@ -12,10 +12,6 @@ interface SafetyResult {
   recommendation: string;
 }
 
-function generateId(): string {
-  return `rf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function parseSafetyResult(raw: string): SafetyResult {
   const cleaned = raw
     .replace(/```json\s*/g, "")
@@ -88,7 +84,6 @@ export async function POST(req: NextRequest) {
     if (result.halt && result.red_flag_type) {
       const db = getDb();
       await db.insert(redFlags).values({
-        id: generateId(),
         session_id,
         type: result.red_flag_type,
         transcript: transcript ?? null,

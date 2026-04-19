@@ -4,11 +4,8 @@ import { CHAT_SYSTEM } from "@/lib/claude/prompts";
 import { loadPatientContext, createMemoryToolHandlers, MEMORY_TOOLS } from "@/lib/claude/memory";
 import { getDb } from "@/db";
 import { chatMessages } from "@/db/schema";
+import { getDemoUserId } from "@/lib/supabase";
 import { eq } from "drizzle-orm";
-
-function generateId(): string {
-  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -27,7 +24,7 @@ export async function POST(req: NextRequest) {
     const db = getDb();
 
     // Load patient context from memory files
-    const patientContext = loadPatientContext(patient_id);
+    const patientContext = await loadPatientContext(patient_id);
 
     // Load recent chat history
     const recentMessages = await db
@@ -64,24 +61,22 @@ export async function POST(req: NextRequest) {
     });
 
     const assistantResponse = result.response;
-    const now = new Date().toISOString();
+    const userId = getDemoUserId();
 
-    // Save user message to database
+    // Save user message to database (id and created_at default in DB)
     await db.insert(chatMessages).values({
-      id: generateId(),
       patient_id,
+      user_id: userId,
       role: "user",
       content: message,
-      created_at: now,
     });
 
     // Save assistant response to database
     await db.insert(chatMessages).values({
-      id: generateId(),
       patient_id,
+      user_id: userId,
       role: "assistant",
       content: assistantResponse,
-      created_at: now,
     });
 
     return Response.json({ response: assistantResponse });

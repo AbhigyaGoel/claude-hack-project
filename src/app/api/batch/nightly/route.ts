@@ -45,11 +45,11 @@ export async function POST() {
   const allPatients = await db.select().from(patients);
   const results = [];
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   for (const patient of allPatients) {
     const patientId = patient.id;
-    const profile = JSON.parse(patient.profile_json);
+    const profile = (patient.profile_json ?? {}) as { name?: string };
 
     // Get recent sessions
     const recentSessions = await db
@@ -59,7 +59,7 @@ export async function POST() {
       .orderBy(desc(sessions.started_at));
 
     const filteredSessions = recentSessions.filter(
-      (s) => s.started_at >= sevenDaysAgo,
+      (s) => s.started_at != null && s.started_at >= sevenDaysAgo,
     );
 
     if (filteredSessions.length === 0) continue;
@@ -101,7 +101,7 @@ export async function POST() {
     }
 
     // Load existing patient context
-    const existingContext = loadPatientContext(patientId);
+    const existingContext = await loadPatientContext(patientId);
 
     try {
       const result = await callClaude({
@@ -147,7 +147,7 @@ export async function POST() {
       // Apply memory updates
       if (analysis.memory_updates) {
         for (const update of analysis.memory_updates) {
-          writeMemoryFile(patientId, update.filename, update.content);
+          await writeMemoryFile(patientId, update.filename, update.content);
         }
       }
 
@@ -162,7 +162,7 @@ export async function POST() {
           ),
         ].join("\n");
 
-        writeMemoryFile(patientId, "pattern_observations.md", patternsContent);
+        await writeMemoryFile(patientId, "pattern_observations.md", patternsContent);
       }
 
       results.push({
