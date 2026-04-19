@@ -936,97 +936,6 @@ export default function SessionPage() {
     }
   }
 
-  async function skipToEnd() {
-    let profile = activeProfile;
-    if (!profile) {
-      const me = await getCurrentUser().catch(() => null);
-      const name = me?.username ? titleCase(me.username) : "Test Patient";
-      profile = await createPatient(name, {
-        body_region: "shoulder",
-        side: "right",
-        onset: "2 weeks ago",
-        mechanism: "overuse",
-        severity_score: 30,
-        instrument_used: "NPRS",
-        functional_deficits: ["overhead reaching"],
-        contraindications: [],
-        red_flags: [],
-        cleared_for_exercise: true,
-      });
-      setActivePatientId(profile.id);
-      setActiveProfile(profile);
-    }
-
-    const fakeExercises: ExercisePlanItem[] = [
-      {
-        id: "scap_retraction",
-        name: "Scapular Retraction",
-        target_muscles: ["middle trapezius", "rhomboids"],
-        target_angles: { shoulder_flexion_degrees: 90 },
-        tolerances: { shoulder_flexion_degrees: 10 },
-        tempo_seconds: "2-0-2-0",
-        sets: 2,
-        reps: 10,
-        rest_seconds: 60,
-        cues: ["Pinch shoulder blades"],
-        compensation_patterns: [{ name: "shrugging", detection: "upper traps elevate", landmarks: [], severity: "yellow" }],
-        regression: "",
-        progression: "",
-      },
-      {
-        id: "wall_slide",
-        name: "Wall Slide",
-        target_muscles: ["serratus anterior", "lower trapezius"],
-        target_angles: { shoulder_flexion_degrees: 160 },
-        tolerances: { shoulder_flexion_degrees: 15 },
-        tempo_seconds: "2-0-2-0",
-        sets: 2,
-        reps: 8,
-        rest_seconds: 60,
-        cues: ["Keep forearms on wall"],
-        compensation_patterns: [{ name: "arching low back", detection: "lumbar extension", landmarks: [], severity: "yellow" }],
-        regression: "",
-        progression: "",
-      },
-    ];
-
-    const startedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-    const endedAt = new Date().toISOString();
-
-    const exerciseRows: ExerciseResult[] = [
-      { exercise_id: "scap_retraction", exercise_name: "Scapular Retraction", set_number: 1, reps: 10, form_score: 0.92 },
-      { exercise_id: "scap_retraction", exercise_name: "Scapular Retraction", set_number: 2, reps: 10, form_score: 0.88 },
-      { exercise_id: "wall_slide", exercise_name: "Wall Slide", set_number: 1, reps: 8, form_score: 0.76 },
-      { exercise_id: "wall_slide", exercise_name: "Wall Slide", set_number: 2, reps: 8, form_score: 0.81 },
-    ];
-
-    const focus = deriveFocusFromExercises(exerciseRows.map((r) => r.exercise_id));
-
-    try {
-      const saved = await saveSession({
-        patient_id: profile.id,
-        plan_id: null,
-        started_at: startedAt,
-        ended_at: endedAt,
-        pain_pre: 5,
-        pain_post: 3,
-        exercises: exerciseRows,
-        summary: focus ? { focus } : null,
-      });
-      setSavedSessionId(saved.id);
-      const fresh = await listSessions(profile.id).catch(() => []);
-      setActiveProfile({ ...profile, session_count: fresh.length });
-    } catch {
-      // Still show summary even if persistence fails
-    }
-
-    setPlan({ session_number: 1, estimated_duration_minutes: 20, exercises: fakeExercises });
-    setCurrentExerciseIndex(fakeExercises.length - 1);
-    setPainPre(5);
-    setPainPost(3);
-    setStep("summary");
-  }
-
   return (
     <main className="flex-1 flex flex-col p-4 gap-4" style={{ background: "var(--color-background)" }}>
       {/* Header */}
@@ -1047,16 +956,6 @@ export default function SessionPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {step !== "summary" && (
-            <button
-              onClick={skipToEnd}
-              className="text-xs px-2 py-1 rounded font-mono"
-              style={{ background: "var(--color-surface-raised)", color: "var(--color-text-muted)", border: "1px dashed var(--color-border)" }}
-              title="Dev: skip to end-of-session summary with fake data"
-            >
-              Skip to End
-            </button>
-          )}
           {plan && (
             <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>{currentExerciseIndex + 1}/{plan.exercises.length}</span>
           )}
