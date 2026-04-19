@@ -103,11 +103,23 @@ export const redFlags = pgTable("red_flags", {
   referred: boolean("referred").notNull().default(false),
 });
 
+/**
+ * Narrator log — canonical record of everything Claude says or decides in a
+ * PT role. Populated by intake, plan, chat, session report, and (when
+ * reintroduced) real-time rep analysis. Chat RAG reads the recent N rows
+ * here as part of patient context.
+ *
+ * `session_id` is nullable so commentary that isn't tied to a live session
+ * (intake, cross-session chat, plan rationale) can still be captured.
+ */
 export const narratorLog = pgTable("narrator_log", {
   id: uuid("id").primaryKey().defaultRandom(),
-  session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
-  t_ms: integer("t_ms").notNull(),
+  patient_id: uuid("patient_id").references(() => patients.id, { onDelete: "cascade" }),
+  session_id: uuid("session_id").references(() => sessions.id, { onDelete: "cascade" }),
+  source: text("source").notNull(), // "intake" | "plan" | "chat" | "report" | "rep_analysis" | "narrator" | "safety"
+  t_ms: integer("t_ms").notNull().default(0),
   reasoning_text: text("reasoning_text").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const chatMessages = pgTable("chat_messages", {

@@ -22,11 +22,47 @@ import {
   createPatient,
   listSessions,
   saveSession,
+  startSession,
   getCurrentUser,
 } from "@/lib/api";
 
 function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+// --- Telemetry helpers ---
+// All exercise-loop events log through here with a [VERO] prefix so you can
+// filter the DevTools console while doing a workout. Each log line maps to a
+// specific Supabase table write (or a write that's expected but not wired yet).
+//
+// Tables written during the exercise loop:
+//   ✓ narrator_log      (via /api/rep-commentary, one row per rep)
+//   ✓ sessions, sets    (via /api/sessions POST at workout end)
+//   ~ rep_analyses      (written inside /api/sessions if faults provided)
+//   ✗ form_events       (no endpoint; route dir empty)
+//   ✗ red_flags         (no endpoint; route dir empty)
+function logVero(msg: string, data?: unknown) {
+  if (data !== undefined) {
+    console.log(`[VERO] ${msg}`, data);
+  } else {
+    console.log(`[VERO] ${msg}`);
+  }
+}
+
+function logVeroOk(msg: string, data?: unknown) {
+  if (data !== undefined) {
+    console.log(`%c[VERO ✓] ${msg}`, "color: #22c55e", data);
+  } else {
+    console.log(`%c[VERO ✓] ${msg}`, "color: #22c55e");
+  }
+}
+
+function logVeroWarn(msg: string, data?: unknown) {
+  if (data !== undefined) {
+    console.warn(`[VERO ⚠] ${msg}`, data);
+  } else {
+    console.warn(`[VERO ⚠] ${msg}`);
+  }
 }
 
 const WebcamView = lazy(() => import("@/components/WebcamView"));
@@ -42,11 +78,13 @@ function WebcamLoading() {
   );
 }
 
-type SessionStep = "loading" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
+type SessionStep = "loading" | "intake" | "diagnosis" | "plan_review" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
 
 const STEP_LABELS: Record<SessionStep, string> = {
   loading: "Loading",
   intake: "Diagnostic Intake",
+  diagnosis: "Assessment Results",
+  plan_review: "Exercise Plan",
   pre_pain: "Pre-Session Rating",
   exercising: "Exercise Session",
   rest: "Rest Period",
@@ -64,6 +102,7 @@ export default function SessionPage() {
   const [liveIntakeResponses, setLiveIntakeResponses] = useState<Record<string, string>>({});
   const [step, setStep] = useState<SessionStep>("loading");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
+  const [commentaryEntries, setCommentaryEntries] = useState<Array<{ id: string; text: string }>>([]);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -77,8 +116,16 @@ export default function SessionPage() {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [movementPhase, setMovementPhase] = useState<MovementPhase>("ready");
 
+  // Agent state
+  const [narratorEntries, setNarratorEntries] = useState<{ id: string; text: string }[]>([]);
+  const [safetyHalt, setSafetyHalt] = useState<string | null>(null);
+  const [formCriticFaults, setFormCriticFaults] = useState<string[]>([]);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastVisionTimeRef = useRef(0);
+
   // Tracking refs
   const sessionStartRef = useRef<number>(0);
+  const sessionIdRef = useRef<string | null>(null);
   const repQualitiesRef = useRef<RepQuality[][]>([[]]);
   const peakAnglesRef = useRef<Record<string, number>[]>([]);
   const repsPerSetRef = useRef<number[]>([]);
@@ -89,6 +136,128 @@ export default function SessionPage() {
   const repStartTimeRef = useRef(0);
 
   const currentExercise = plan?.exercises[currentExerciseIndex];
+
+  // --- Agent calls (non-blocking, fire-and-forget during exercise) ---
+
+  /** Form Critic: analyze rep quality via Claude after each completed rep */
+  const callFormCritic = useCallback(async (exercise: ExercisePlanItem, peakAngle: number, repNum: number) => {
+    try {
+      const res = await fetch("/api/form-critic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exercise: { id: exercise.id, name: exercise.name, target_angles: exercise.target_angles, tolerances: exercise.tolerances, compensation_patterns: exercise.compensation_patterns },
+          rep_data: { peak_angle: peakAngle, rep_number: repNum },
+        }),
+      });
+      if (!res.ok) {
+        logVeroWarn(`form-critic returned ${res.status} — endpoint not wired (rep_analyses will stay empty)`);
+        return;
+      }
+      const data = await res.json();
+      if (data.faults?.length > 0) {
+        logVeroOk(`form-critic: ${data.faults.length} fault(s) detected`, data.faults);
+        setFormCriticFaults(data.faults.map((f: { description?: string; type?: string }) => f.description || f.type || ""));
+      } else {
+        setFormCriticFaults([]);
+      }
+    } catch (err) {
+      logVeroWarn("form-critic fetch threw", err);
+    }
+  }, []);
+
+  /** Safety Monitor: check for red flags via Haiku — runs on vision frames */
+  const callSafetyMonitor = useCallback(async (frameBase64?: string) => {
+    try {
+      const res = await fetch("/api/safety-monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: `session_${sessionStartRef.current}`,
+          frame_base64: frameBase64,
+        }),
+      });
+      if (!res.ok) {
+        logVeroWarn(`safety-monitor returned ${res.status} — endpoint not wired (red_flags will stay empty)`);
+        return;
+      }
+      const data = await res.json();
+      if (data.halt) {
+        logVeroWarn("safety-monitor flagged HALT", data);
+        setSafetyHalt(data.red_flag_type || "Red flag detected");
+        setStep("summary");
+      }
+    } catch (err) {
+      logVeroWarn("safety-monitor fetch threw", err);
+    }
+  }, []);
+
+  /** Clinical Narrator: stream reasoning to side panel after each rep */
+  const callNarrator = useCallback(async (exercise: ExercisePlanItem, repNum: number, quality: string, peakAngle: number) => {
+    if (!activeProfile) return;
+    try {
+      const res = await fetch("/api/narrator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: `session_${sessionStartRef.current}`,
+          patient_id: activeProfile.id,
+          current_exercise: exercise.name,
+          rep_data: { rep_number: repNum, peak_angle: peakAngle, quality },
+        }),
+      });
+      if (!res.ok) {
+        logVeroWarn(`narrator returned ${res.status} — streaming endpoint not wired (narrator_log not written via this path)`);
+        return;
+      }
+      if (!res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      const entryId = `nar_${Date.now()}`;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const chunk = JSON.parse(line.slice(6));
+            if (chunk.content) {
+              setNarratorEntries(prev => {
+                const existing = prev.find(e => e.id === entryId);
+                if (existing) {
+                  return prev.map(e => e.id === entryId ? { ...e, text: e.text + chunk.content } : e);
+                }
+                return [...prev.slice(-4), { id: entryId, text: chunk.content }];
+              });
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch { /* non-blocking */ }
+  }, [activeProfile]);
+
+  /** Vision sampling: capture frame at 1fps for safety monitor */
+  const sendVisionFrame = useCallback(async () => {
+    if (!videoRef.current) return;
+    const now = Date.now();
+    if (now - lastVisionTimeRef.current < 3000) return; // every 3s
+    lastVisionTimeRef.current = now;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(videoRef.current, 0, 0, 320, 240);
+      const base64 = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
+      callSafetyMonitor(base64);
+    } catch { /* non-blocking */ }
+  }, [callSafetyMonitor]);
 
   // Check for existing active patient on mount. A cleared returning patient
   // skips the "welcome back" confirmation and goes straight into the session
@@ -163,16 +332,42 @@ export default function SessionPage() {
       setActiveProfile(created);
       buildPlanFromDiagnostic(result, 1);
     }
-    setStep("pre_pain");
+    setStep("diagnosis");
   }
 
-  function handlePrePain(value: number) {
+  async function handlePrePain(value: number) {
     setPainPre(value);
     sessionStartRef.current = Date.now();
+    sessionIdRef.current = null;
     repQualitiesRef.current = [[]];
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
     setShowPlanIntro(true);
+    setCommentaryEntries([]);
+
+    logVero(
+      `▶ Session starting — patient=${activeProfile?.id ?? "?"} exercise=${currentExercise?.name ?? "?"} pain_pre=${value}`,
+    );
+
+    // Create the sessions row NOW so every per-rep write can reference a
+    // real session_id instead of null.
+    if (activeProfile) {
+      try {
+        const started = await startSession({
+          patient_id: activeProfile.id,
+          plan_id: null,
+          pain_pre: value,
+        });
+        sessionIdRef.current = started.id;
+        logVeroOk(`✅ Created sessions row (id=${started.id}) — rep commentary will carry this session_id`);
+      } catch (err) {
+        logVeroWarn("startSession failed — rep commentary will log with session_id=null", err);
+      }
+    }
+
+    logVero(
+      "During the workout: each rep → POST /api/rep-commentary → narrator_log (source=rep_analysis). form-critic / safety / narrator endpoints return 404 — those tables stay empty.",
+    );
     setStep("exercising");
   }
 
@@ -200,6 +395,60 @@ export default function SessionPage() {
     if (key) {
       const prev = peakAnglesRef.current[currentExerciseIndex][key] ?? 0;
       peakAnglesRef.current[currentExerciseIndex][key] = Math.max(prev, peakAngleRef.current);
+    }
+
+    // Fire agents (non-blocking).
+    const savedPeak = peakAngleRef.current;
+    logVero(
+      `Rep ${newRep} complete · ${currentExercise.name} · peak=${savedPeak.toFixed(1)}° target=${Math.round(targetAngle)}° · quality=${quality}`,
+    );
+    callFormCritic(currentExercise, savedPeak, newRep);
+    callNarrator(currentExercise, newRep, quality, savedPeak);
+
+    // Also persist one-sentence rep commentary for chat memory/RAG.
+    if (activeProfile) {
+      const fetchId = `rep_${Date.now()}`;
+      const t0 = performance.now();
+      logVero(`🧠 Asking Claude for PT note (rep ${newRep})...`);
+      fetch("/api/rep-commentary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patient_id: activeProfile.id,
+          session_id: sessionIdRef.current,
+          exercise_name: currentExercise.name,
+          rep_number: newRep,
+          set_number: currentSet,
+          peak_angle: savedPeak,
+          target_angle: targetAngle,
+          quality,
+          t_ms: Date.now() - sessionStartRef.current,
+        }),
+      })
+        .then(async (r) => {
+          const ms = Math.round(performance.now() - t0);
+          if (!r.ok) {
+            logVeroWarn(`rep-commentary ${r.status} after ${ms}ms — narrator_log NOT written`);
+            return null;
+          }
+          const data = await r.json();
+          if (data?.commentary) {
+            logVeroOk(
+              `📝 Wrote narrator_log row (rep ${newRep}, ${ms}ms): "${data.commentary}"`,
+            );
+          } else {
+            logVeroWarn(`rep-commentary returned empty commentary (${ms}ms)`);
+          }
+          return data;
+        })
+        .then((data) => {
+          if (data?.commentary) {
+            setCommentaryEntries((prev) => [...prev.slice(-4), { id: fetchId, text: data.commentary }]);
+          }
+        })
+        .catch((err) => {
+          logVeroWarn("rep-commentary fetch threw", err);
+        });
     }
 
     // Reset
@@ -230,6 +479,9 @@ export default function SessionPage() {
   const handleLandmarks = useCallback(
     (_landmarks: Landmark[], angles: Record<string, number>) => {
       if (!currentExercise) return;
+
+      // Run safety monitor on vision frames (every 3s, non-blocking)
+      sendVisionFrame();
 
       const side = diagnostic?.side === "right" ? "right" : "left";
       const primaryJoint = currentExercise.target_angles
@@ -287,6 +539,22 @@ export default function SessionPage() {
     setStep("exercising");
   }
 
+  function skipExercise() {
+    if (!plan) return;
+    const nextIndex = currentExerciseIndex + 1;
+    if (nextIndex >= plan.exercises.length) {
+      setStep("post_pain");
+    } else {
+      repQualitiesRef.current[nextIndex] = [];
+      setCurrentExerciseIndex(nextIndex);
+      setCurrentSet(1);
+      setCurrentRep(0);
+      peakAngleRef.current = 0;
+      repPhaseRef.current = "idle";
+      setMovementPhase("ready");
+    }
+  }
+
   async function handlePostPain(value: number) {
     setPainPost(value);
     const savedId = await persistSession(value);
@@ -327,8 +595,13 @@ export default function SessionPage() {
       }
     });
 
+    logVero(
+      `🏁 Session ending — persisting 1 session row + ${exerciseRows.length} set row(s) to Supabase...`,
+    );
+
     try {
-      const saved = await saveSession({
+      const result = await saveSession({
+        id: sessionIdRef.current ?? undefined,
         patient_id: activeProfile.id,
         plan_id: null,
         started_at: startedAt,
@@ -338,13 +611,32 @@ export default function SessionPage() {
         exercises: exerciseRows,
         summary: null,
       });
-      setSavedSessionId(saved.id);
+      setSavedSessionId(result.id);
+      logVeroOk(
+        `✅ Session ${sessionIdRef.current ? "finalized" : "persisted (created)"} — id=${result.id}`,
+      );
 
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });
-      return saved.id;
-    } catch {
-      // Persistence failure is non-fatal for the in-memory summary view.
+
+      // Coverage summary — what actually made it to Supabase.
+      const totalReps = repQualitiesRef.current.flat().length;
+      console.log(
+        "%c[VERO] — Session coverage summary —",
+        "color: #38bdc3; font-weight: bold",
+      );
+      console.table({
+        "sessions row": "✓ 1 written",
+        "sets rows": `✓ ${exerciseRows.length} written`,
+        "narrator_log rows (rep notes)": `✓ ~${totalReps} written (one per rep via rep-commentary)`,
+        "rep_analyses rows": "~ only if faults provided in /api/sessions payload (currently none)",
+        "form_events rows": "✗ 0 — /api/form-critic endpoint not wired",
+        "red_flags rows": "✗ 0 — /api/safety-monitor endpoint not wired",
+      });
+
+      return result.id;
+    } catch (err) {
+      logVeroWarn("session persistence FAILED — sessions/sets NOT written", err);
       return null;
     }
   }
@@ -521,6 +813,178 @@ export default function SessionPage() {
         </div>
       )}
 
+      {/* Diagnosis Results */}
+      {step === "diagnosis" && diagnostic && (
+        <div className="flex-1 flex items-center justify-center animate-fade-in">
+          <div className="glass-card-bright p-8 max-w-lg w-full">
+            <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+              Assessment Results
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Region</div>
+                <div className="text-sm font-medium capitalize" style={{ color: "var(--color-text-primary)" }}>{diagnostic.body_region}</div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Side</div>
+                <div className="text-sm font-medium capitalize" style={{ color: "var(--color-text-primary)" }}>{diagnostic.side}</div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Severity</div>
+                <div className="text-sm font-mono font-semibold" style={{ color: diagnostic.severity_score > 60 ? "#ef4444" : diagnostic.severity_score > 30 ? "#eab308" : "var(--color-success)" }}>
+                  {diagnostic.severity_score}/100
+                </div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Instrument</div>
+                <div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{diagnostic.instrument_used}</div>
+              </div>
+            </div>
+
+            {diagnostic.functional_deficits.length > 0 && (
+              <div className="mb-4">
+                <div className="data-label mb-2">Functional Deficits</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {diagnostic.functional_deficits.map((d, i) => (
+                    <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
+                      {d.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {diagnostic.red_flags.length > 0 && (
+              <div className="mb-4 p-3 rounded-xl" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                <div className="text-xs font-medium mb-1" style={{ color: "#ef4444" }}>Red Flags Detected</div>
+                {diagnostic.red_flags.map((f, i) => (
+                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mb-4 p-3 rounded-xl" style={{ background: diagnostic.cleared_for_exercise ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${diagnostic.cleared_for_exercise ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}` }}>
+              <div className="w-2 h-2 rounded-full" style={{ background: diagnostic.cleared_for_exercise ? "var(--color-success)" : "#ef4444" }} />
+              <span className="text-sm font-medium" style={{ color: diagnostic.cleared_for_exercise ? "var(--color-success)" : "#ef4444" }}>
+                {diagnostic.cleared_for_exercise ? "Cleared for exercise" : "Not cleared — refer to PT"}
+              </span>
+            </div>
+
+            <button onClick={() => setStep("plan_review")} className="btn-accent w-full">
+              View Exercise Plan
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Review */}
+      {step === "plan_review" && plan && (
+        <div className="flex-1 flex items-center justify-center animate-fade-in overflow-y-auto py-4">
+          <div className="glass-card-bright p-8 max-w-lg w-full">
+            <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+              Your Exercise Plan
+            </h2>
+            <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>
+              Session {plan.session_number} · ~{plan.estimated_duration_minutes} min · {plan.exercises.length} exercises · drag to reorder
+            </p>
+
+            <div className="flex flex-col gap-2 mb-6">
+              {plan.exercises.map((ex, i) => (
+                <div
+                  key={ex.id}
+                  draggable
+                  onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+                    if (from === i) return;
+                    setPlan((prev) => {
+                      if (!prev) return prev;
+                      const exs = [...prev.exercises];
+                      const [moved] = exs.splice(from, 1);
+                      exs.splice(i, 0, moved);
+                      return { ...prev, exercises: exs };
+                    });
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-xl cursor-grab active:cursor-grabbing"
+                  style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}
+                >
+                  {/* Drag handle */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" strokeLinecap="round" className="shrink-0 opacity-40">
+                    <circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/>
+                    <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
+                    <circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/>
+                  </svg>
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate mb-1.5" style={{ color: "var(--color-text-primary)" }}>{ex.name}</div>
+                    <div className="flex items-center gap-3">
+                      {/* Sets stepper */}
+                      <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, sets: Math.max(1, x.sets - 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >−</button>
+                        <span className="text-xs font-mono w-12 text-center" style={{ color: "var(--color-text-secondary)" }}>{ex.sets} sets</span>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, sets: Math.min(10, x.sets + 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >+</button>
+                      </div>
+                      <span className="text-xs" style={{ color: "var(--color-border)" }}>×</span>
+                      {/* Reps stepper */}
+                      <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, reps: Math.max(1, x.reps - 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >−</button>
+                        <span className="text-xs font-mono w-12 text-center" style={{ color: "var(--color-text-secondary)" }}>{ex.reps} reps</span>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, reps: Math.min(50, x.reps + 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPlan((prev) => prev ? { ...prev, exercises: prev.exercises.filter((_, j) => j !== i) } : prev)}
+                    className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 opacity-40 hover:opacity-100"
+                    style={{ background: "transparent", border: "1px solid transparent", color: "var(--color-danger)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-danger-dim)"; e.currentTarget.style.borderColor = "var(--color-danger)"; e.currentTarget.style.opacity = "1"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.opacity = "0.4"; }}
+                    title="Remove exercise"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setStep("pre_pain")}
+              disabled={plan.exercises.length === 0}
+              className="btn-accent w-full"
+            >
+              Start Session
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Pre-pain */}
       {step === "pre_pain" && (
         <div className="flex-1 flex items-center justify-center animate-fade-in">
@@ -528,16 +992,99 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Exercise — 2-panel layout */}
+      {/* Exercise — 3-panel layout */}
       {step === "exercising" && currentExercise && (
         <div className="flex-1 flex gap-4 min-h-0 animate-fade-in relative">
+          {/* Exercise Setlist (left) */}
+          <aside className="w-64 flex flex-col gap-2 overflow-y-auto glass-card p-3 shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Session Progress</span>
+              <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>
+                {currentExerciseIndex + 1}/{plan?.exercises.length}
+              </span>
+            </div>
+
+            {/* Overall progress bar */}
+            {plan && (
+              <div className="mb-2">
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--color-surface-raised)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${((currentExerciseIndex + (currentRep / (currentExercise?.reps || 1))) / plan.exercises.length) * 100}%`,
+                      background: "var(--color-accent)",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Exercise list */}
+            <div className="flex flex-col gap-1">
+              {plan?.exercises.map((ex, i) => {
+                const isCurrent = i === currentExerciseIndex;
+                const isDone = i < currentExerciseIndex;
+                const qualities = repQualitiesRef.current[i] ?? [];
+                const greenPct = qualities.length > 0
+                  ? Math.round((qualities.filter(q => q === "green").length / qualities.length) * 100)
+                  : 0;
+
+                return (
+                  <div
+                    key={ex.id}
+                    className="flex items-center gap-2 p-2 rounded-lg transition-colors"
+                    style={{
+                      background: isCurrent ? "var(--color-accent-dim)" : isDone ? "var(--color-surface-raised)" : "transparent",
+                      border: isCurrent ? "1px solid var(--color-accent)" : "1px solid transparent",
+                      opacity: !isCurrent && !isDone ? 0.5 : 1,
+                    }}
+                  >
+                    {/* Status icon */}
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{
+                      background: isDone ? "var(--color-success)" : isCurrent ? "var(--color-accent)" : "var(--color-surface-raised)",
+                    }}>
+                      {isDone ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                      ) : (
+                        <span className="text-[9px] font-mono font-bold" style={{ color: isCurrent ? "white" : "var(--color-text-muted)" }}>{i + 1}</span>
+                      )}
+                    </div>
+
+                    {/* Exercise info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate" style={{ color: isCurrent ? "var(--color-accent)" : isDone ? "var(--color-text-primary)" : "var(--color-text-muted)" }}>
+                        {ex.name}
+                      </div>
+                      <div className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                        {isCurrent ? (
+                          `Set ${currentSet}/${ex.sets} · Rep ${currentRep}/${ex.reps}`
+                        ) : isDone ? (
+                          `Done · ${greenPct}% form`
+                        ) : (
+                          `${ex.sets}×${ex.reps}`
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quality indicator for completed exercises */}
+                    {isDone && (
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{
+                        background: greenPct >= 80 ? "var(--color-success)" : greenPct >= 50 ? "#eab308" : "#ef4444",
+                      }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+
           {/* Webcam (center) */}
           <div
             className="flex-1 min-h-0 transition-all duration-300"
             style={showPlanIntro ? { filter: "blur(12px)", pointerEvents: "none" } : undefined}
           >
             <Suspense fallback={<WebcamLoading />}>
-              <WebcamView showAngles onLandmarksDetected={handleLandmarks} />
+              <WebcamView showAngles onLandmarksDetected={handleLandmarks} onVideoReady={(v) => { videoRef.current = v; }} />
             </Suspense>
           </div>
 
@@ -561,6 +1108,50 @@ export default function SessionPage() {
               targetAngle={Object.values(currentExercise.target_angles)[0]}
               phase={movementPhase}
             />
+            {commentaryEntries.length > 0 && (
+              <div className="glass-card p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <div
+                    className="w-2 h-2 rounded-full animate-pulse"
+                    style={{ background: "var(--color-accent)" }}
+                  />
+                  <span
+                    className="text-xs font-medium uppercase tracking-wide"
+                    style={{ color: "var(--color-accent)" }}
+                  >
+                    PT Notes
+                  </span>
+                </div>
+                {commentaryEntries.slice(-3).map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="text-xs leading-relaxed p-2 rounded-lg"
+                    style={{
+                      background: "var(--color-surface-raised)",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    {entry.text}
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={skipExercise}
+              className="btn-ghost text-xs w-full"
+              style={{ opacity: 0.6 }}
+            >
+              Skip Exercise →
+            </button>
+            {/* Form Critic feedback */}
+            {formCriticFaults.length > 0 && (
+              <div className="glass-card p-3" style={{ borderColor: "#eab308" }}>
+                <div className="text-xs font-medium mb-1" style={{ color: "#eab308" }}>Form Analysis</div>
+                {formCriticFaults.map((f, i) => (
+                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
+                ))}
+              </div>
+            )}
           </aside>
 
           {/* Plan intro overlay — shows once when entering exercising step */}

@@ -54,18 +54,6 @@ export const TOOLS: Record<string, ToolDef> = {
       required: ["text", "emotion"],
     },
   },
-  set_music_tempo: {
-    name: "set_music_tempo",
-    description: "Adjust Tone.js music BPM for cadence matching or phase changes.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        bpm: { type: "number" },
-        phase: { type: "string", enum: ["warmup", "working", "rest", "cooldown"] },
-      },
-      required: ["bpm"],
-    },
-  },
   play_cue: {
     name: "play_cue",
     description: "Play a pre-baked audio cue (countdown, completion chime, alert).",
@@ -180,7 +168,7 @@ export function getTools(...names: string[]): ToolDef[] {
 
 /** Orchestrator tools — full set */
 export const ORCHESTRATOR_TOOLS = getTools(
-  "speak", "set_music_tempo", "play_cue",
+  "speak", "play_cue",
   "log_rep", "progress_exercise", "regress_exercise", "flag_red_flag",
   "query_history",
 );

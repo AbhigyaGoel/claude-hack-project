@@ -93,6 +93,8 @@ export async function GET(req: NextRequest) {
  * start_session/evaluate_rep/end_session actions instead.
  */
 interface PostPayload {
+  /** If present, update that row (finalize flow). Else create a new one. */
+  id?: string;
   patient_id: string;
   plan_id?: string | null;
   started_at?: string;
@@ -124,19 +126,44 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const [sessionRow] = await db
-    .insert(sessions)
-    .values({
-      patient_id: body.patient_id,
-      plan_id: body.plan_id ?? null,
-      user_id: userId,
-      started_at: body.started_at ? new Date(body.started_at) : new Date(),
-      ended_at: body.ended_at ? new Date(body.ended_at) : new Date(),
-      pain_pre: body.pain_pre ?? null,
-      pain_post: body.pain_post ?? null,
-      summary_json: body.summary ?? null,
-    })
-    .returning();
+  let sessionRow: typeof sessions.$inferSelect;
+
+  if (body.id) {
+    // Finalize flow — the session row already exists (created at workout
+    // start via /api/sessions/start). Update it rather than creating a new
+    // row so rep_commentary entries written with this session_id stay valid.
+    const updated = await db
+      .update(sessions)
+      .set({
+        ended_at: body.ended_at ? new Date(body.ended_at) : new Date(),
+        pain_pre: body.pain_pre ?? undefined,
+        pain_post: body.pain_post ?? null,
+        summary_json: body.summary ?? null,
+      })
+      .where(and(eq(sessions.id, body.id), eq(sessions.user_id, userId)))
+      .returning();
+
+    if (updated.length === 0) {
+      return NextResponse.json({ error: "session not found" }, { status: 404 });
+    }
+    sessionRow = updated[0];
+  } else {
+    // Create-in-one-shot flow — no prior /start call.
+    const inserted = await db
+      .insert(sessions)
+      .values({
+        patient_id: body.patient_id,
+        plan_id: body.plan_id ?? null,
+        user_id: userId,
+        started_at: body.started_at ? new Date(body.started_at) : new Date(),
+        ended_at: body.ended_at ? new Date(body.ended_at) : new Date(),
+        pain_pre: body.pain_pre ?? null,
+        pain_post: body.pain_post ?? null,
+        summary_json: body.summary ?? null,
+      })
+      .returning();
+    sessionRow = inserted[0];
+  }
 
   // Persist sets + optional rep analyses. Natural-key upsert keeps the
   // endpoint idempotent if the client retries.

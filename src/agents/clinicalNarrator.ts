@@ -45,7 +45,7 @@ export async function* streamNarration(
       },
     ],
     maxTokens: 2048,
-    thinking: { type: "enabled", budget_tokens: 8192 },
+    thinking: { type: "adaptive", budget_tokens: 8192 },
   });
 
   for await (const chunk of stream) {

@@ -42,7 +42,7 @@ export async function callClaude(opts: {
   tools: ToolDef[];
   toolHandlers: Record<string, (input: Record<string, unknown>) => Promise<unknown>>;
   maxTokens?: number;
-  thinking?: { type: "enabled"; budget_tokens: number };
+  thinking?: { type: "adaptive"; budget_tokens: number };
 }): Promise<ToolCallResult> {
   const {
     model = "claude-sonnet-4-6",
@@ -200,7 +200,7 @@ export async function* streamClaude(opts: {
   systemParts?: string[];
   messages: Anthropic.MessageParam[];
   maxTokens?: number;
-  thinking?: { type: "enabled"; budget_tokens: number };
+  thinking?: { type: "adaptive"; budget_tokens: number };
 }): AsyncGenerator<{ type: "text" | "thinking"; content: string }> {
   const {
     model = "claude-opus-4-7",

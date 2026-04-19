@@ -163,8 +163,7 @@ async function generateExercisesForRegion(
     model: "claude-opus-4-7",
     max_tokens: 16000,
     thinking: {
-      type: "enabled",
-      budget_tokens: 10000,
+      type: "adaptive" as const,
     },
     messages: [
       {

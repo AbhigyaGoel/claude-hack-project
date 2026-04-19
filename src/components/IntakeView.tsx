@@ -701,9 +701,37 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
 
       {step === "red_flags" && (
         <div className="animate-fade-in">
-          <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
-            Safety Screening
-          </h2>
+          <div className="flex items-start justify-between mb-1">
+            <h2 className="text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              Safety Screening
+            </h2>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  const allClear: Record<string, string> = {};
+                  RED_FLAG_QUESTIONS.forEach((q) => { allClear[q.id] = "No"; });
+                  setResponses((prev) => ({ ...prev, ...allClear }));
+                }}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200"
+                style={{ background: "var(--color-success-dim)", color: "var(--color-success)", border: "1px solid var(--color-success)" }}
+              >
+                All Clear
+              </button>
+              <button
+                onClick={() => {
+                  const rand: Record<string, string> = {};
+                  RED_FLAG_QUESTIONS.forEach((q) => {
+                    rand[q.id] = q.options![Math.floor(Math.random() * q.options!.length)];
+                  });
+                  setResponses((prev) => ({ ...prev, ...rand }));
+                }}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200"
+                style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-border)" }}
+              >
+                Randomize
+              </button>
+            </div>
+          </div>
           <p className="text-sm mb-5" style={{ color: "var(--color-text-muted)" }}>
             These questions help us ensure exercise is safe for you.
           </p>
@@ -742,9 +770,43 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
 
       {step === "assessment" && (
         <div className="animate-fade-in">
-          <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
-            {bodyRegion && bodyRegion.charAt(0).toUpperCase() + bodyRegion.slice(1)} Assessment
-          </h2>
+          <div className="flex items-start justify-between mb-1">
+            <h2 className="text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {bodyRegion && bodyRegion.charAt(0).toUpperCase() + bodyRegion.slice(1)} Assessment
+            </h2>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  const defaults: Record<string, string> = {
+                    side: "Right", onset: "1-2 weeks", mechanism: "Gradual onset",
+                    overhead: "Mild", carrying: "Mild", dressing: "None", pain_level: "3",
+                  };
+                  setResponses((prev) => ({ ...prev, ...defaults }));
+                }}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200"
+                style={{ background: "var(--color-success-dim)", color: "var(--color-success)", border: "1px solid var(--color-success)" }}
+              >
+                Auto-fill
+              </button>
+              <button
+                onClick={() => {
+                  const rand: Record<string, string> = {};
+                  SHOULDER_QUESTIONS.forEach((q) => {
+                    if (q.type === "select") {
+                      rand[q.id] = q.options![Math.floor(Math.random() * q.options!.length)];
+                    } else if (q.type === "pain_scale") {
+                      rand[q.id] = String(Math.floor(Math.random() * 11));
+                    }
+                  });
+                  setResponses((prev) => ({ ...prev, ...rand }));
+                }}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200"
+                style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-border)" }}
+              >
+                Randomize
+              </button>
+            </div>
+          </div>
           <p className="text-sm mb-5" style={{ color: "var(--color-text-muted)" }}>
             Rate your functional limitations to personalize your program.
           </p>
