@@ -3,7 +3,7 @@ import { designProgram } from "@/agents/programDesigner";
 import { getDb } from "@/db";
 import { patients, plans } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import type { PatientProfile } from "@/types/patient";
+import type { PatientProfile, DiagnosticResult } from "@/types/patient";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -15,27 +15,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Patient not found" }, { status: 404 });
   }
 
-  const row = patientRows[0];
-  const profileJson = JSON.parse(row.profile_json);
+  const patientRow = patientRows[0];
+  const profileJson = patientRow.profile_json as { diagnostic: DiagnosticResult };
+
+  const createdAt =
+    patientRow.created_at instanceof Date
+      ? patientRow.created_at.toISOString()
+      : String(patientRow.created_at ?? new Date().toISOString());
 
   const patientProfile: PatientProfile = {
-    id: row.id,
+    id: patientRow.id,
     diagnostic: profileJson.diagnostic,
     session_count: 0,
-    created_at: row.created_at,
-    updated_at: row.created_at,
+    created_at: createdAt,
+    updated_at: createdAt,
   };
 
   const plan = await designProgram(patientProfile);
 
-  const planId = `plan_${Date.now()}`;
-  await db.insert(plans).values({
-    id: planId,
-    patient_id,
-    plan_json: JSON.stringify(plan),
-    active: true,
-    created_at: new Date().toISOString(),
-  });
+  const [planRow] = await db
+    .insert(plans)
+    .values({
+      patient_id,
+      plan_json: plan,
+      active: true,
+    })
+    .returning({ id: plans.id });
 
-  return NextResponse.json({ plan_id: planId, plan });
+  return NextResponse.json({ plan_id: planRow.id, plan });
 }

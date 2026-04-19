@@ -1,89 +1,136 @@
-import fs from "fs";
-import path from "path";
-
-const MEMORY_ROOT = path.join(process.cwd(), "patient-memory");
+import { and, eq, sql } from "drizzle-orm";
+import { getDb } from "@/db";
+import { patientMemory } from "@/db/schema";
+import { getDemoUserId } from "@/lib/supabase";
 
 /**
- * Patient memory tool — file-based persistent memory per patient.
- * Each patient gets a namespace: /patient-memory/{patient_id}/
+ * Patient memory — persistent per-patient notes curated by Claude.
  *
- * Files Claude maintains:
+ * Previously backed by the filesystem (`patient-memory/{patient_id}/*`);
+ * now backed by the `patient_memory` table in Postgres. The API shape is
+ * preserved so agents and routes keep working:
+ *
+ *   readMemoryFile / writeMemoryFile / appendMemoryFile / listMemoryFiles
+ *   loadPatientContext / createMemoryToolHandlers
+ *
+ * Canonical filenames Claude maintains per patient:
  * - case_notes.md — running SOAP notes
  * - progression_history.json — exercise advancement decisions
  * - pattern_observations.md — compensations, preferences, pain triggers
  * - goals.md — functional goals + progress
  */
-export function getMemoryPath(patientId: string): string {
-  const dir = path.join(MEMORY_ROOT, patientId);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
+
+export async function readMemoryFile(
+  patientId: string,
+  filename: string,
+): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ content: patientMemory.content })
+    .from(patientMemory)
+    .where(
+      and(eq(patientMemory.patient_id, patientId), eq(patientMemory.filename, filename)),
+    )
+    .limit(1);
+  return rows[0]?.content ?? null;
 }
 
-export function readMemoryFile(patientId: string, filename: string): string | null {
-  const filePath = path.join(MEMORY_ROOT, patientId, filename);
-  if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath, "utf-8");
+export async function writeMemoryFile(
+  patientId: string,
+  filename: string,
+  content: string,
+): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(patientMemory)
+    .values({
+      patient_id: patientId,
+      user_id: getDemoUserId(),
+      filename,
+      content,
+      updated_at: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [patientMemory.patient_id, patientMemory.filename],
+      set: { content, updated_at: new Date() },
+    });
 }
 
-export function writeMemoryFile(patientId: string, filename: string, content: string): void {
-  const dir = getMemoryPath(patientId);
-  fs.writeFileSync(path.join(dir, filename), content, "utf-8");
+export async function appendMemoryFile(
+  patientId: string,
+  filename: string,
+  content: string,
+): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(patientMemory)
+    .values({
+      patient_id: patientId,
+      user_id: getDemoUserId(),
+      filename,
+      content,
+      updated_at: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [patientMemory.patient_id, patientMemory.filename],
+      set: {
+        content: sql`${patientMemory.content} || E'\n' || ${content}`,
+        updated_at: new Date(),
+      },
+    });
 }
 
-export function appendMemoryFile(patientId: string, filename: string, content: string): void {
-  const dir = getMemoryPath(patientId);
-  const filePath = path.join(dir, filename);
-  const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf-8") : "";
-  fs.writeFileSync(filePath, existing + "\n" + content, "utf-8");
-}
-
-export function listMemoryFiles(patientId: string): string[] {
-  const dir = path.join(MEMORY_ROOT, patientId);
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir);
+export async function listMemoryFiles(patientId: string): Promise<string[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ filename: patientMemory.filename })
+    .from(patientMemory)
+    .where(eq(patientMemory.patient_id, patientId));
+  return rows.map((r) => r.filename);
 }
 
 /**
- * Load all patient memory as context string for prompt injection.
+ * Load all patient memory as a single context string for prompt injection.
  */
-export function loadPatientContext(patientId: string): string {
-  const files = listMemoryFiles(patientId);
-  if (files.length === 0) return "No prior history for this patient.";
+export async function loadPatientContext(patientId: string): Promise<string> {
+  const db = getDb();
+  const rows = await db
+    .select({ filename: patientMemory.filename, content: patientMemory.content })
+    .from(patientMemory)
+    .where(eq(patientMemory.patient_id, patientId))
+    .orderBy(patientMemory.filename);
 
-  const sections = files.map((f) => {
-    const content = readMemoryFile(patientId, f);
-    return `## ${f}\n${content}`;
-  });
+  if (rows.length === 0) return "No prior history for this patient.";
 
-  return sections.join("\n\n---\n\n");
+  return rows.map((r) => `## ${r.filename}\n${r.content}`).join("\n\n---\n\n");
 }
 
 /**
- * Memory tool handlers for Claude tool-use.
+ * Memory tool handlers for Claude tool-use. Shape is unchanged from the
+ * filesystem implementation; handlers are still async and return the same
+ * JSON envelopes.
  */
 export function createMemoryToolHandlers(patientId: string) {
   return {
     read_memory: async (input: Record<string, unknown>) => {
       const filename = input.filename as string;
-      const content = readMemoryFile(patientId, filename);
+      const content = await readMemoryFile(patientId, filename);
       return { filename, content: content ?? "File not found", exists: content !== null };
     },
     write_memory: async (input: Record<string, unknown>) => {
       const filename = input.filename as string;
       const content = input.content as string;
-      writeMemoryFile(patientId, filename, content);
+      await writeMemoryFile(patientId, filename, content);
       return { filename, written: true };
     },
     append_memory: async (input: Record<string, unknown>) => {
       const filename = input.filename as string;
       const content = input.content as string;
-      appendMemoryFile(patientId, filename, content);
+      await appendMemoryFile(patientId, filename, content);
       return { filename, appended: true };
     },
     list_memory: async () => {
-      return { files: listMemoryFiles(patientId) };
+      return { files: await listMemoryFiles(patientId) };
     },
   };
 }

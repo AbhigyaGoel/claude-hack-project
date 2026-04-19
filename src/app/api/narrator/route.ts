@@ -3,10 +3,6 @@ import { streamNarration } from "@/agents/clinicalNarrator";
 import { getDb } from "@/db";
 import { narratorLog } from "@/db/schema";
 
-function generateId(): string {
-  return `nl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -36,14 +32,13 @@ export async function POST(req: NextRequest) {
 
           for await (const chunk of narration) {
             fullText += chunk.content;
-            const sseData = JSON.stringify({ type: "narrator", content: chunk.content });
+            const sseData = JSON.stringify({ type: "narrator", text: chunk.content });
             controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
           }
 
           if (fullText.length > 0) {
             const db = getDb();
             await db.insert(narratorLog).values({
-              id: generateId(),
               session_id,
               t_ms: Date.now() - sessionStartMs,
               reasoning_text: fullText,

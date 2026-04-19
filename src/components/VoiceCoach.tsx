@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Conversation } from "@11labs/client";
 import type { RepQuality } from "@/types/assessment";
 
 type MovementPhase = "ready" | "lifting" | "holding" | "lowering";
@@ -13,58 +14,17 @@ interface VoiceCoachProps {
   readonly lastRepQuality?: RepQuality;
   readonly movementPhase: MovementPhase;
   readonly exerciseName: string;
+  /** Current joint angle from pose detection */
+  readonly currentAngle?: number;
+  /** Target angle for the current exercise */
+  readonly targetAngle?: number;
+  /** Latest vision faults from the form critic */
+  readonly visionFaults?: string[];
+  /** Pause contextual updates (e.g. during rest period) without disconnecting */
+  readonly isPaused?: boolean;
 }
 
-// Short, varied cues to avoid repetition
-const GREEN_CUES = [
-  "[calmly] Good rep.",
-  "[calmly] Nice form.",
-  "[calmly] That's it.",
-  "[calmly] Solid.",
-  "[calmly] Right there.",
-];
-
-const YELLOW_CUES = [
-  "[firmly] Watch your form. Try to reach the full range.",
-  "[firmly] Almost there. Extend a bit further.",
-  "[firmly] Focus on your range of motion.",
-];
-
-const RED_CUES = [
-  "[firmly] Let's reset. Focus on controlled movement.",
-  "[firmly] Slow it down. Quality over speed.",
-  "[firmly] Take a breath, then try again with control.",
-];
-
-function pickRandom(arr: readonly string[]): string {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function buildRepCue(
-  rep: number,
-  quality: RepQuality,
-): string {
-  if (quality === "green") {
-    if (rep <= 3) {
-      return "[encouragingly] Great start, keep that form.";
-    }
-    return pickRandom(GREEN_CUES);
-  }
-  if (quality === "yellow") {
-    return pickRandom(YELLOW_CUES);
-  }
-  return pickRandom(RED_CUES);
-}
-
-function buildFatigueCue(rep: number, quality: RepQuality): string {
-  if (quality === "red") {
-    return "[firmly] Almost done. Reset your position and finish strong.";
-  }
-  if (quality === "yellow") {
-    return "[firmly] Stay focused. Keep pushing through with good form.";
-  }
-  return "[firmly] Strong finish. Keep it steady.";
-}
+type CoachStatus = "idle" | "connecting" | "active" | "error";
 
 export default function VoiceCoach({
   currentRep,
@@ -72,196 +32,251 @@ export default function VoiceCoach({
   currentSet,
   totalSets,
   lastRepQuality,
-  movementPhase,
   exerciseName,
+  currentAngle,
+  targetAngle,
+  visionFaults,
+  isPaused = false,
 }: VoiceCoachProps) {
+  const [status, setStatus] = useState<CoachStatus>("idle");
+  const [mode, setMode] = useState<"listening" | "speaking">("listening");
   const [muted, setMuted] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Queue and playback refs (stable across renders)
-  const queueRef = useRef<string[]>([]);
-  const isSpeakingRef = useRef(false);
+  const conversationRef = useRef<Conversation | null>(null);
+  /** Prevents race-condition double-connect (Strict Mode double-mount or rapid remount) */
+  const connectingRef = useRef(false);
   const prevRepRef = useRef(0);
   const prevSetRef = useRef(1);
-  const hasStartedRef = useRef(false);
-  const mutedRef = useRef(muted);
+  const prevVisionFaultsRef = useRef<string[]>([]);
+  const mutableMuted = useRef(muted);
 
-  // Keep mutedRef in sync
-  useEffect(() => {
-    mutedRef.current = muted;
-  }, [muted]);
+  useEffect(() => { mutableMuted.current = muted; }, [muted]);
 
-  // Process the speech queue sequentially
-  const processQueue = useCallback(async () => {
-    if (isSpeakingRef.current) return;
-    if (queueRef.current.length === 0) return;
+  // ── Start conversational AI session ────────────────────────────────────────
+  const startCoach = useCallback(async () => {
+    if (conversationRef.current || connectingRef.current) return;
+    connectingRef.current = true;
+    setStatus("connecting");
+    setErrorMsg(null);
 
-    isSpeakingRef.current = true;
-    setSpeaking(true);
-
-    while (queueRef.current.length > 0) {
-      if (mutedRef.current) {
-        queueRef.current = [];
-        break;
+    try {
+      const res = await fetch("/api/elevenlabs/coach-signed-url", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `Signed URL failed: ${res.status}`);
       }
+      const { signedUrl } = await res.json();
 
-      const text = queueRef.current.shift()!;
-      try {
-        const { speakCoachingCue } = await import("@/lib/elevenLabs");
-        await speakCoachingCue(text);
-      } catch (err) {
-        // TTS failure (invalid API key, network, etc.) -- skip silently
-        console.warn("VoiceCoach: TTS failed, skipping cue.", err);
-      }
+      const conversation = await Conversation.startSession({
+        signedUrl,
+        onConnect: () => setStatus("active"),
+        onDisconnect: () => {
+          conversationRef.current = null;
+          connectingRef.current = false;
+          setStatus("idle");
+        },
+        onError: (msg) => {
+          console.error("[VoiceCoach]", msg);
+          setErrorMsg(typeof msg === "string" ? msg : "Connection error");
+          connectingRef.current = false;
+          setStatus("error");
+        },
+        onModeChange: ({ mode: m }) => setMode(m),
+      });
+
+      conversationRef.current = conversation;
+      connectingRef.current = false;
+      // Send initial exercise context now that the reference is fully initialized
+      conversation.sendContextualUpdate(
+        `EXERCISE START | name: ${exerciseName} | target: ${totalReps} reps x ${totalSets} sets`,
+      );
+    } catch (err) {
+      console.error("[VoiceCoach] startCoach error:", err);
+      setErrorMsg(err instanceof Error ? err.message : "Failed to connect");
+      connectingRef.current = false;
+      setStatus("error");
     }
+  }, [exerciseName, totalReps, totalSets]);
 
-    isSpeakingRef.current = false;
-    setSpeaking(false);
+  // Auto-start when component mounts (exercise begins)
+  useEffect(() => {
+    startCoach();
+    return () => {
+      conversationRef.current?.endSession();
+      conversationRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const enqueue = useCallback(
-    (text: string) => {
-      queueRef.current.push(text);
-      processQueue();
-    },
-    [processQueue],
-  );
-
-  // --- Exercise start cue ---
+  // ── Push rep data after each rep ───────────────────────────────────────────
   useEffect(() => {
-    if (hasStartedRef.current) return;
-    hasStartedRef.current = true;
-    prevRepRef.current = currentRep;
-    prevSetRef.current = currentSet;
-
-    enqueue(
-      `[encouragingly] Let's begin with ${exerciseName}. Take your time getting into position.`,
-    );
-  }, [exerciseName, enqueue, currentRep, currentSet]);
-
-  // --- Rep completion cues ---
-  useEffect(() => {
-    // Only fire when rep count actually increments
     if (currentRep === 0 || currentRep <= prevRepRef.current) {
       prevRepRef.current = currentRep;
       return;
     }
-
     prevRepRef.current = currentRep;
-    const quality = lastRepQuality ?? "green";
 
-    // Check for set completion
+    if (!conversationRef.current || mutableMuted.current || isPaused) return;
+
+    const faults = visionFaults?.length ? visionFaults.join(", ") : "none";
+    const angleInfo =
+      currentAngle !== undefined && targetAngle !== undefined
+        ? ` | angle: ${Math.round(currentAngle)}deg / target: ${Math.round(targetAngle)}deg`
+        : "";
+
     if (currentRep >= totalReps) {
-      enqueue("[warmly] Great set! Take a rest.");
-      return;
+      conversationRef.current.sendContextualUpdate(
+        `SET COMPLETE | set: ${currentSet}/${totalSets} | quality: ${lastRepQuality ?? "green"}`,
+      );
+    } else {
+      conversationRef.current.sendContextualUpdate(
+        `REP COMPLETE | rep: ${currentRep}/${totalReps} | quality: ${lastRepQuality ?? "green"}${angleInfo} | faults: [${faults}]`,
+      );
     }
+  }, [currentRep, totalReps, currentSet, totalSets, lastRepQuality, currentAngle, targetAngle, visionFaults, isPaused]);
 
-    // Fatigue zone (reps 8+)
-    if (currentRep >= 8) {
-      enqueue(buildFatigueCue(currentRep, quality));
-      return;
-    }
-
-    // Normal rep cue
-    enqueue(buildRepCue(currentRep, quality));
-  }, [currentRep, totalReps, lastRepQuality, enqueue]);
-
-  // --- Set change detection ---
+  // ── Push new set start ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (currentSet <= prevSetRef.current) {
-      prevSetRef.current = currentSet;
-      return;
-    }
+    if (currentSet <= prevSetRef.current) { prevSetRef.current = currentSet; return; }
     prevSetRef.current = currentSet;
-    // New set starting after rest
-    enqueue(
-      `[encouragingly] Set ${currentSet} of ${totalSets}. Let's go.`,
+    if (!conversationRef.current || mutableMuted.current || isPaused) return;
+    conversationRef.current.sendContextualUpdate(
+      `SET START | set: ${currentSet}/${totalSets} | exercise: ${exerciseName}`,
     );
-  }, [currentSet, totalSets, enqueue]);
+  }, [currentSet, totalSets, exerciseName, isPaused]);
 
-  // --- Toggle mute ---
+  // ── Push vision faults as they arrive ─────────────────────────────────────
+  useEffect(() => {
+    if (!visionFaults?.length) return;
+    const prev = prevVisionFaultsRef.current;
+    const newFaults = visionFaults.filter((f) => !prev.includes(f));
+    prevVisionFaultsRef.current = visionFaults;
+
+    if (!newFaults.length || !conversationRef.current || mutableMuted.current || isPaused) return;
+    conversationRef.current.sendContextualUpdate(
+      `VISION FAULT | severity: high | detected: ${newFaults.join(", ")}`,
+    );
+  }, [visionFaults]);
+
+  // ── Mute: stop mic but keep connection alive ───────────────────────────────
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
-      if (next) {
-        // Clear pending queue on mute
-        queueRef.current = [];
-      }
+      conversationRef.current?.setMicMuted(next);
       return next;
     });
   }, []);
 
+  // ── UI ─────────────────────────────────────────────────────────────────────
+  const isSpeaking = status === "active" && mode === "speaking";
+  const isListening = status === "active" && mode === "listening" && !muted;
+
   return (
     <div
-      className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-      style={{
-        background: "var(--color-surface-raised)",
-        border: "1px solid var(--color-border)",
-      }}
+      className="flex flex-col gap-2 px-3 py-3 rounded-xl text-xs"
+      style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}
     >
-      {/* Speaker / mute indicator */}
-      <button
-        onClick={toggleMute}
-        aria-label={muted ? "Unmute voice coach" : "Mute voice coach"}
-        className="flex items-center justify-center w-7 h-7 rounded-md transition-colors"
-        style={{
-          background: muted
-            ? "var(--color-danger-dim, rgba(239,68,68,0.15))"
-            : "transparent",
-        }}
-      >
-        {muted ? (
-          // Muted icon
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--color-text-muted)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M11 5L6 9H2v6h4l5 4V5z" />
-            <line x1="23" y1="9" x2="17" y2="15" />
-            <line x1="17" y1="9" x2="23" y2="15" />
-          </svg>
-        ) : (
-          // Speaker icon with optional "active" pulse
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={
-              speaking
-                ? "var(--color-accent)"
-                : "var(--color-text-muted)"
-            }
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M11 5L6 9H2v6h4l5 4V5z" />
-            <path d="M19.07 4.93a10 10 0 010 14.14" />
-            <path d="M15.54 8.46a5 5 0 010 7.07" />
-          </svg>
-        )}
-      </button>
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* Animated status indicator */}
+          {status === "connecting" ? (
+            <div className="spinner" style={{ width: 12, height: 12 }} />
+          ) : isSpeaking ? (
+            <div className="flex gap-0.5 items-end h-3.5">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="w-0.5 rounded-full animate-pulse"
+                  style={{
+                    background: "var(--color-accent)",
+                    height: `${6 + i * 3}px`,
+                    animationDelay: `${i * 0.12}s`,
+                  }}
+                />
+              ))}
+            </div>
+          ) : isListening ? (
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{ background: "var(--color-success)", boxShadow: "0 0 6px var(--color-success)" }}
+            />
+          ) : (
+            <div className="w-2 h-2 rounded-full" style={{ background: "var(--color-border)" }} />
+          )}
 
-      <span
-        style={{
-          color: speaking
-            ? "var(--color-accent)"
-            : "var(--color-text-muted)",
-        }}
-      >
-        {muted
-          ? "Voice muted"
-          : speaking
-            ? "Speaking..."
-            : "Voice coach"}
-      </span>
+          <span
+            style={{
+              color: isSpeaking
+                ? "var(--color-accent)"
+                : isListening
+                ? "var(--color-success)"
+                : "var(--color-text-muted)",
+            }}
+          >
+            {status === "connecting"
+              ? "Connecting..."
+              : status === "error"
+              ? "Coach offline"
+              : isSpeaking
+              ? "Vero speaking..."
+              : isListening
+              ? "Listening"
+              : muted
+              ? "Muted"
+              : "Voice coach"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* Mute toggle */}
+          <button
+            onClick={toggleMute}
+            aria-label={muted ? "Unmute" : "Mute"}
+            className="w-6 h-6 flex items-center justify-center rounded"
+            style={{ background: muted ? "var(--color-danger-dim)" : "transparent" }}
+          >
+            {muted ? (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" strokeLinecap="round">
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={isListening ? "var(--color-success)" : "var(--color-text-muted)"} strokeWidth="2" strokeLinecap="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            )}
+          </button>
+
+          {/* Retry if errored */}
+          {status === "error" && (
+            <button
+              onClick={startCoach}
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{ background: "var(--color-surface)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Error detail */}
+      {status === "error" && errorMsg && (
+        <p className="text-[10px] leading-relaxed" style={{ color: "var(--color-danger)" }}>
+          {errorMsg}
+        </p>
+      )}
+
+      {/* Hint when active */}
+      {status === "active" && !muted && (
+        <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+          Speak any time — Vero is listening.
+        </p>
+      )}
     </div>
   );
 }

@@ -2,11 +2,8 @@ import { NextRequest } from "next/server";
 import { chat, type ChatMessage } from "@/agents/chatAgent";
 import { getDb } from "@/db";
 import { chatMessages } from "@/db/schema";
+import { getDemoUserId } from "@/lib/supabase";
 import { eq } from "drizzle-orm";
-
-function generateId(): string {
-  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 const MAX_HISTORY_MESSAGES = 20;
 
@@ -38,20 +35,18 @@ export async function POST(req: NextRequest) {
 
     const assistantResponse = await chat({ patient_id, message, history });
 
-    const now = new Date().toISOString();
+    const userId = getDemoUserId();
     await db.insert(chatMessages).values({
-      id: generateId(),
       patient_id,
+      user_id: userId,
       role: "user",
       content: message,
-      created_at: now,
     });
     await db.insert(chatMessages).values({
-      id: generateId(),
       patient_id,
+      user_id: userId,
       role: "assistant",
       content: assistantResponse,
-      created_at: now,
     });
 
     return Response.json({ response: assistantResponse });

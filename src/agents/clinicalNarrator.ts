@@ -19,7 +19,7 @@ export interface NarrationChunk {
 export async function* streamNarration(
   input: NarrationInput,
 ): AsyncGenerator<NarrationChunk> {
-  const patientContext = loadPatientContext(input.patient_id);
+  const patientContext = await loadPatientContext(input.patient_id);
 
   const systemParts = input.systemParts ?? [
     NARRATOR_SYSTEM,

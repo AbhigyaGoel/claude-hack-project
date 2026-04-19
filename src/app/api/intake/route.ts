@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { conductIntake } from "@/agents/diagnosticInterviewer";
 import { getDb } from "@/db";
 import { patients } from "@/db/schema";
+import { getDemoUserId } from "@/lib/supabase";
 import type { BodyRegion } from "@/types/exercise";
 import type { Side } from "@/types/patient";
 
@@ -24,20 +25,21 @@ export async function POST(req: NextRequest) {
       history: responses.history as string | undefined,
     });
 
-    const patientId = `patient_${Date.now()}`;
     const db = getDb();
-    await db.insert(patients).values({
-      id: patientId,
-      profile_json: JSON.stringify({
+    const [row] = await db
+      .insert(patients)
+      .values({
+        user_id: getDemoUserId(),
         name: patientName || "Patient",
-        diagnostic,
-      }),
-      memory_path: `/patient-memory/${patientId}`,
-      created_at: new Date().toISOString(),
-    });
+        profile_json: {
+          name: patientName || "Patient",
+          diagnostic,
+        },
+      })
+      .returning({ id: patients.id });
 
     return NextResponse.json({
-      patient_id: patientId,
+      patient_id: row.id,
       diagnostic,
       instrument: diagnostic.instrument_used,
     });

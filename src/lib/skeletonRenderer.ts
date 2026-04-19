@@ -10,7 +10,7 @@ const COLORS: Record<SkeletonColor, string> = {
 const KEY_JOINTS = new Set([11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]);
 
 // BlazePose 33-landmark skeleton connections
-const POSE_CONNECTIONS: readonly [number, number][] = [
+export const POSE_CONNECTIONS: readonly [number, number][] = [
   // Torso
   [11, 12], [11, 23], [12, 24], [23, 24],
   // Left arm

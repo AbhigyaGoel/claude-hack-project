@@ -1,83 +1,141 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import {
+  pgTable,
+  pgSchema,
+  uuid,
+  text,
+  boolean,
+  integer,
+  doublePrecision,
+  jsonb,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
-export const patients = sqliteTable("patients", {
-  id: text("id").primaryKey(),
-  profile_json: text("profile_json").notNull(),
-  memory_path: text("memory_path").notNull(),
-  created_at: text("created_at").notNull(),
+/**
+ * Supabase exposes managed users in the `auth.users` table. We declare a
+ * minimal pointer to it so our patient-scoped tables can reference user_id
+ * without Drizzle trying to manage that table.
+ */
+const authSchema = pgSchema("auth");
+export const authUsers = authSchema.table("users", {
+  id: uuid("id").primaryKey(),
 });
 
-export const plans = sqliteTable("plans", {
-  id: text("id").primaryKey(),
-  patient_id: text("patient_id").notNull().references(() => patients.id),
-  plan_json: text("plan_json").notNull(),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
-  citations_json: text("citations_json"),
-  created_at: text("created_at").notNull(),
+export const patients = pgTable("patients", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+  name: text("name").notNull().default("Patient"),
+  profile_json: jsonb("profile_json").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const sessions = sqliteTable("sessions", {
-  id: text("id").primaryKey(),
-  plan_id: text("plan_id").notNull().references(() => plans.id),
-  patient_id: text("patient_id").notNull().references(() => patients.id),
-  started_at: text("started_at").notNull(),
-  ended_at: text("ended_at"),
+export const plans = pgTable("plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  patient_id: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  plan_json: jsonb("plan_json").notNull(),
+  active: boolean("active").notNull().default(true),
+  citations_json: jsonb("citations_json"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // plan_id is nullable so sessions can be persisted before a server plan is
+  // generated (e.g., the current client-side quick-plan path in /session).
+  plan_id: uuid("plan_id").references(() => plans.id, { onDelete: "set null" }),
+  patient_id: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+  started_at: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  ended_at: timestamp("ended_at", { withTimezone: true }),
   pain_pre: integer("pain_pre"),
   pain_post: integer("pain_post"),
-  summary_json: text("summary_json"),
+  summary_json: jsonb("summary_json"),
   artifact_url: text("artifact_url"),
 });
 
-export const sets = sqliteTable("sets", {
-  id: text("id").primaryKey(),
-  session_id: text("session_id").notNull().references(() => sessions.id),
-  exercise_id: text("exercise_id").notNull(),
-  exercise_name: text("exercise_name").notNull(),
-  set_number: integer("set_number").notNull(),
-  reps: integer("reps").notNull().default(0),
-  rpe: real("rpe"),
-  pain: integer("pain"),
-  form_score: real("form_score"),
-});
+export const sets = pgTable(
+  "sets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+    exercise_id: text("exercise_id").notNull(),
+    exercise_name: text("exercise_name").notNull(),
+    set_number: integer("set_number").notNull(),
+    reps: integer("reps").notNull().default(0),
+    rpe: doublePrecision("rpe"),
+    pain: integer("pain"),
+    form_score: doublePrecision("form_score"),
+  },
+  (t) => ({
+    naturalKey: uniqueIndex("sets_session_exercise_set_unique").on(
+      t.session_id,
+      t.exercise_id,
+      t.set_number,
+    ),
+  }),
+);
 
-export const repAnalyses = sqliteTable("rep_analyses", {
-  id: text("id").primaryKey(),
-  set_id: text("set_id").notNull().references(() => sets.id),
+export const repAnalyses = pgTable("rep_analyses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  set_id: uuid("set_id").notNull().references(() => sets.id, { onDelete: "cascade" }),
   rep_num: integer("rep_num").notNull(),
   video_clip_url: text("video_clip_url"),
-  faults_json: text("faults_json"),
-  quality: real("quality"),
+  faults_json: jsonb("faults_json"),
+  quality: doublePrecision("quality"),
 });
 
-export const formEvents = sqliteTable("form_events", {
-  id: text("id").primaryKey(),
-  set_id: text("set_id").notNull().references(() => sets.id),
+export const formEvents = pgTable("form_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  set_id: uuid("set_id").notNull().references(() => sets.id, { onDelete: "cascade" }),
   t_ms: integer("t_ms").notNull(),
   fault: text("fault").notNull(),
   severity: integer("severity").notNull(),
   cue_sent: text("cue_sent"),
 });
 
-export const redFlags = sqliteTable("red_flags", {
-  id: text("id").primaryKey(),
-  session_id: text("session_id").notNull().references(() => sessions.id),
+export const redFlags = pgTable("red_flags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   transcript: text("transcript"),
-  halted: integer("halted", { mode: "boolean" }).notNull().default(false),
-  referred: integer("referred", { mode: "boolean" }).notNull().default(false),
+  halted: boolean("halted").notNull().default(false),
+  referred: boolean("referred").notNull().default(false),
 });
 
-export const narratorLog = sqliteTable("narrator_log", {
-  id: text("id").primaryKey(),
-  session_id: text("session_id").notNull().references(() => sessions.id),
+export const narratorLog = pgTable("narrator_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  session_id: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
   t_ms: integer("t_ms").notNull(),
   reasoning_text: text("reasoning_text").notNull(),
 });
 
-export const chatMessages = sqliteTable("chat_messages", {
-  id: text("id").primaryKey(),
-  patient_id: text("patient_id").notNull().references(() => patients.id),
-  role: text("role").notNull(), // "user" | "assistant"
+export const chatMessages = pgTable("chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  patient_id: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
   content: text("content").notNull(),
-  created_at: text("created_at").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Patient memory — Claude's curated per-patient notes, one row per
+ * (patient, filename). Replaces the filesystem-based patient-memory/ tree.
+ */
+export const patientMemory = pgTable(
+  "patient_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    patient_id: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+    user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    content: text("content").notNull().default(""),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    patientFilename: uniqueIndex("patient_memory_patient_filename_unique").on(
+      t.patient_id,
+      t.filename,
+    ),
+  }),
+);

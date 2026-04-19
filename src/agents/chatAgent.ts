@@ -14,7 +14,7 @@ export interface ChatInput {
 }
 
 export async function chat(input: ChatInput): Promise<string> {
-  const patientContext = loadPatientContext(input.patient_id);
+  const patientContext = await loadPatientContext(input.patient_id);
   const systemWithContext = `${CHAT_SYSTEM}\n\n## Patient Context\n${patientContext}`;
 
   const messages: ChatMessage[] = [

@@ -11,8 +11,8 @@ import { getDb } from "@/db";
 import { sessions, sets, repAnalyses, redFlags, narratorLog } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+function newId(): string {
+  return crypto.randomUUID();
 }
 
 interface SSEEvent {
@@ -66,13 +66,13 @@ async function handleStartSession(
     pain_pre?: number;
   };
 
-  const id = sessionId ?? `session_${Date.now()}`;
+  const id = sessionId ?? newId();
 
   await db.insert(sessions).values({
     id,
     plan_id,
     patient_id,
-    started_at: new Date().toISOString(),
+    started_at: new Date(),
     pain_pre: pain_pre ?? null,
   });
 
@@ -92,7 +92,7 @@ async function handleEndSession(
   await db
     .update(sessions)
     .set({
-      ended_at: new Date().toISOString(),
+      ended_at: new Date(),
       pain_post: pain_post ?? null,
     })
     .where(eq(sessions.id, sessionId));
@@ -115,7 +115,6 @@ async function handleHaltSession(
 
   // Record the halt
   await db.insert(redFlags).values({
-    id: generateId("rf"),
     session_id: sessionId,
     type: red_flag_type ?? "manual_halt",
     transcript: reason ?? null,
@@ -126,7 +125,7 @@ async function handleHaltSession(
   // End the session
   await db
     .update(sessions)
-    .set({ ended_at: new Date().toISOString() })
+    .set({ ended_at: new Date() })
     .where(eq(sessions.id, sessionId));
 
   return Response.json({
@@ -172,7 +171,7 @@ async function handleEvaluateRep(
   const sessionStartMs = Date.now();
 
   // Build cached system parts for prompt caching
-  const patientContext = patient_id ? loadPatientContext(patient_id) : "";
+  const patientContext = patient_id ? await loadPatientContext(patient_id) : "";
   const exerciseLibrary = queryExercises({ body_region: undefined });
   const exerciseLibraryJson = JSON.stringify(
     exerciseLibrary.map((ex) => ({
@@ -235,7 +234,6 @@ async function handleEvaluateRep(
         if (safetyResult.halt) {
           // Write red flag to DB
           await db.insert(redFlags).values({
-            id: generateId("rf"),
             session_id: sessionId,
             type: safetyResult.red_flag_type ?? "unknown",
             transcript: null,
@@ -258,28 +256,29 @@ async function handleEvaluateRep(
           data: formResult,
         })));
 
-        // Log rep analysis
-        const setId = `set_${sessionId}_${exercise.id}_${set_number}`;
-        try {
-          await db.insert(sets).values({
-            id: setId,
+        // Upsert the set row (unique on session_id + exercise_id + set_number)
+        // and recover its UUID for the rep_analyses FK.
+        const [setRow] = await db
+          .insert(sets)
+          .values({
             session_id: sessionId,
             exercise_id: exercise.id,
             exercise_name: exercise.name,
             set_number,
             reps: rep_number,
             form_score: formResult.quality,
-          });
-        } catch {
-          // Set already exists — that's fine
-        }
+          })
+          .onConflictDoUpdate({
+            target: [sets.session_id, sets.exercise_id, sets.set_number],
+            set: { reps: rep_number, form_score: formResult.quality },
+          })
+          .returning({ id: sets.id });
 
         await db.insert(repAnalyses).values({
-          id: generateId("ra"),
-          set_id: setId,
+          set_id: setRow.id,
           rep_num: rep_number,
           video_clip_url: null,
-          faults_json: JSON.stringify(formResult.faults),
+          faults_json: formResult.faults,
           quality: formResult.quality,
         });
 
@@ -345,7 +344,6 @@ async function handleEvaluateRep(
             // Log narrator output
             if (narratorFullText.length > 0) {
               await db.insert(narratorLog).values({
-                id: generateId("nl"),
                 session_id: sessionId,
                 t_ms: Date.now() - sessionStartMs,
                 reasoning_text: narratorFullText,

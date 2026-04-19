@@ -21,10 +21,12 @@ export async function POST(req: NextRequest) {
   const session = sessionRows[0];
 
   const patientRows = await db.select().from(patients).where(eq(patients.id, session.patient_id));
-  const patient = patientRows[0] ? JSON.parse(patientRows[0].profile_json) : null;
+  const patient = (patientRows[0]?.profile_json as { name?: string } | null) ?? null;
 
-  const planRows = await db.select().from(plans).where(eq(plans.id, session.plan_id));
-  const plan = planRows[0] ? JSON.parse(planRows[0].plan_json) : null;
+  const planRows = session.plan_id
+    ? await db.select().from(plans).where(eq(plans.id, session.plan_id))
+    : [];
+  const plan = planRows[0]?.plan_json ?? null;
 
   const sessionSets = await db.select().from(sets).where(eq(sets.session_id, session_id));
 
@@ -51,13 +53,13 @@ export async function POST(req: NextRequest) {
         date: s.started_at,
         pain_pre: s.pain_pre,
         pain_post: s.pain_post,
-        summary: s.summary_json ? JSON.parse(s.summary_json) : null,
+        summary: s.summary_json ?? null,
       })),
     });
 
     await db
       .update(sessions)
-      .set({ summary_json: JSON.stringify(report) })
+      .set({ summary_json: report })
       .where(eq(sessions.id, session_id));
 
     return NextResponse.json(report);

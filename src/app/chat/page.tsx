@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { getActiveProfile } from "@/lib/storage";
-import type { StoredProfile } from "@/types/storage";
+import { getActivePatient } from "@/lib/api";
+import type { PatientRecord } from "@/types/storage";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -12,14 +12,16 @@ interface ChatMessage {
 }
 
 export default function ChatPage() {
-  const [profile, setProfile] = useState<StoredProfile | null>(null);
+  const [profile, setProfile] = useState<PatientRecord | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setProfile(getActiveProfile());
+    getActivePatient()
+      .then(setProfile)
+      .catch(() => setProfile(null));
   }, []);
 
   useEffect(() => {

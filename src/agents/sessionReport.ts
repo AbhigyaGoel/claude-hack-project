@@ -4,12 +4,12 @@ import { getTools } from "@/lib/claude/tools";
 
 interface SessionRow {
   id: string;
-  started_at: string;
+  started_at: Date | string;
   patient_id: string;
-  plan_id: string;
+  plan_id: string | null;
   pain_pre?: number | null;
   pain_post?: number | null;
-  summary_json?: string | null;
+  summary_json?: unknown;
 }
 
 interface SetRow {
@@ -26,7 +26,7 @@ interface FormEventRow {
 
 interface PriorSession {
   id: string;
-  date: string;
+  date: Date | string;
   pain_pre?: number | null;
   pain_post?: number | null;
   summary: unknown;
@@ -71,7 +71,10 @@ function buildFallbackReport(input: ReportInput): SessionReport {
 
   return {
     title: `Session Report — ${new Date(session.started_at).toLocaleDateString()}`,
-    date: session.started_at,
+    date:
+      session.started_at instanceof Date
+        ? session.started_at.toISOString()
+        : session.started_at,
     patient_name: patient?.name || "Patient",
     sections: [
       {

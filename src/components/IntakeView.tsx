@@ -7,6 +7,10 @@ import { speakNonBlocking, type PlaybackHandle } from "@/lib/elevenLabs";
 
 interface IntakeViewProps {
   onComplete: (result: DiagnosticResult) => void;
+  /** Pre-filled region from voice conversation — user clicks override */
+  liveRegion?: BodyRegion | null;
+  /** Pre-filled responses from voice conversation — user clicks override */
+  liveResponses?: Record<string, string>;
 }
 
 interface Question {
@@ -88,11 +92,26 @@ function SpeakingIndicator() {
   );
 }
 
-export default function IntakeView({ onComplete }: IntakeViewProps) {
+export default function IntakeView({ onComplete, liveRegion, liveResponses }: IntakeViewProps) {
   const [step, setStep] = useState<IntakeStep>("region");
   const [bodyRegion, setBodyRegion] = useState<BodyRegion | null>(null);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [redFlagDetected, setRedFlagDetected] = useState(false);
+
+  // Sync live region from voice — advance to red_flags step, but only if user hasn't already picked one
+  useEffect(() => {
+    if (liveRegion && !bodyRegion) {
+      setBodyRegion(liveRegion);
+      setStep("red_flags");
+    }
+  }, [liveRegion, bodyRegion]);
+
+  // Sync live responses from voice — user-clicked values always win (prev takes precedence)
+  useEffect(() => {
+    if (liveResponses && Object.keys(liveResponses).length > 0) {
+      setResponses((prev) => ({ ...liveResponses, ...prev }));
+    }
+  }, [liveResponses]);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   // Track the current playback so we can cancel it
