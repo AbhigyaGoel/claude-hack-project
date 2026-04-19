@@ -839,6 +839,13 @@ export default function SessionPage() {
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });
 
+      // Fire-and-forget: text the patient's PT a session summary.
+      fetch("/api/notify-pt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: result.id, patient_id: activeProfile.id }),
+      }).catch(() => {});
+
       // Agent 3 — Progression Coach. Fires once, takes the whole session +
       // prior history, produces a plain-language recap for the patient.
       const coachSessionId = sessionIdRef.current ?? result.id;

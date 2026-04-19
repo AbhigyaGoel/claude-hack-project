@@ -11,6 +11,7 @@ export interface PatientRecord {
   profile: { name?: string; diagnostic?: DiagnosticResult | null } | null;
   created_at: string | null;
   session_count: number;
+  pt_phone?: string | null;
 }
 
 export interface ExerciseResult {

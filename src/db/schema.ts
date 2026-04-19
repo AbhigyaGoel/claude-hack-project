@@ -27,6 +27,7 @@ export const patients = pgTable("patients", {
   user_id: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull().default("Patient"),
   profile_json: jsonb("profile_json").notNull(),
+  pt_phone: text("pt_phone"),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
