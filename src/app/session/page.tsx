@@ -1489,8 +1489,13 @@ export default function SessionPage() {
               </div>
             )}
 
-            <div className="flex gap-3 justify-center mt-6">
+            <div className="flex gap-3 justify-center mt-6 flex-wrap">
               <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
+              {sessionIdRef.current && (
+                <Link href={`/report/${sessionIdRef.current}`} className="btn-ghost text-sm">
+                  Full Report →
+                </Link>
+              )}
               <Link href="/" className="btn-accent">Return Home</Link>
             </div>
           </div>
