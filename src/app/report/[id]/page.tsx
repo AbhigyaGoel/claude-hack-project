@@ -593,7 +593,7 @@ export default function ReportPage() {
             onKeyDown={handleKeyDown}
             placeholder='Ask Vero about your report... e.g. "Why this exercise?"'
             disabled={chatLoading || !report.patient_id}
-            className="flex-1 bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-border-bright)] transition-colors"
+            className="flex-1 bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-border-bright)] transition-colors"
           />
           <button
             onClick={() => sendChatMessage(chatInput)}
