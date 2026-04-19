@@ -452,5 +452,3714 @@
     "contraindications": ["cervical_radiculopathy_acute"],
     "regression": "Smaller range of motion",
     "progression": "Hold light dumbbells"
+  },
+  {
+    "id": "prone_t_raise_01",
+    "name": "Prone T-Raise",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["middle_trapezius", "rhomboids", "posterior_deltoid"],
+    "primary_joint_angle": "shoulder_abduction_degrees",
+    "target_angles": {
+      "shoulder_abduction_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_abduction_degrees": 15
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Lie face down and lift arms out to sides forming a T",
+      "Squeeze shoulder blades together at the top",
+      "Keep thumbs pointing toward ceiling"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "scapular_elevation",
+        "detection": "shoulders shrug toward ears during lift",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      },
+      {
+        "name": "cervical_extension",
+        "detection": "head lifts excessively during arm raise",
+        "landmarks": [0, 11],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_low_back_pain", "cervical_radiculopathy_acute"],
+    "regression": "Reduce range of motion, keep arms lower",
+    "progression": "Hold 1-2lb dumbbells"
+  },
+  {
+    "id": "prone_w_raise_01",
+    "name": "Prone W-Raise",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["lower_trapezius", "infraspinatus", "teres_minor"],
+    "primary_joint_angle": "shoulder_external_rotation_degrees",
+    "target_angles": {
+      "shoulder_external_rotation_degrees": 60,
+      "shoulder_abduction_degrees": 45
+    },
+    "tolerances": {
+      "shoulder_external_rotation_degrees": 10,
+      "shoulder_abduction_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Lie face down with elbows bent to form a W shape",
+      "Lift arms while squeezing shoulder blades down",
+      "Rotate forearms so thumbs point to ceiling"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "scapular_elevation",
+        "detection": "shoulders rise toward ears during lift",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_rotator_cuff_tear"],
+    "regression": "Perform without lifting arms, just squeeze",
+    "progression": "Add 1lb wrist weights"
+  },
+  {
+    "id": "external_rotation_band_90_01",
+    "name": "90/90 External Rotation with Band",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["infraspinatus", "teres_minor", "posterior_deltoid"],
+    "primary_joint_angle": "shoulder_external_rotation_degrees",
+    "target_angles": {
+      "shoulder_external_rotation_degrees": 90,
+      "shoulder_abduction_degrees": 90,
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_external_rotation_degrees": 10,
+      "shoulder_abduction_degrees": 10,
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Hold arm at 90 degrees abduction with elbow bent 90",
+      "Rotate forearm from parallel-to-floor to perpendicular",
+      "Keep elbow at shoulder height throughout"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "elbow_drop",
+        "detection": "elbow drops below shoulder level during rotation",
+        "landmarks": [13, 11],
+        "severity": "yellow"
+      },
+      {
+        "name": "trunk_extension",
+        "detection": "trunk arches backward during external rotation",
+        "landmarks": [11, 23],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["shoulder_instability_multidirectional", "labral_tear_acute"],
+    "regression": "Reduce abduction angle to 45 degrees",
+    "progression": "Increase band resistance"
+  },
+  {
+    "id": "overhead_press_seated_01",
+    "name": "Seated Overhead Press",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["light_dumbbell", "chair"],
+    "target_muscles": ["anterior_deltoid", "middle_deltoid", "upper_trapezius", "triceps"],
+    "primary_joint_angle": "shoulder_flexion_degrees",
+    "target_angles": {
+      "shoulder_flexion_degrees": 170,
+      "elbow_extension_degrees": 170
+    },
+    "tolerances": {
+      "shoulder_flexion_degrees": 10,
+      "elbow_extension_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Press dumbbells overhead until arms are nearly straight",
+      "Keep core engaged, do not arch your back",
+      "Lower to ear level with control"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_hyperextension",
+        "detection": "low back arches excessively during press",
+        "landmarks": [23, 11],
+        "severity": "red"
+      },
+      {
+        "name": "asymmetric_press",
+        "detection": "one arm extends significantly ahead of the other",
+        "landmarks": [15, 16, 11, 12],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["impingement_acute", "rotator_cuff_tear_full", "cervical_radiculopathy_acute"],
+    "regression": "Reduce weight or press to forehead height only",
+    "progression": "Increase weight by 2lb"
+  },
+  {
+    "id": "scapular_push_up_01",
+    "name": "Scapular Push-Up",
+    "body_region": "shoulder",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["serratus_anterior", "lower_trapezius"],
+    "primary_joint_angle": "shoulder_protraction_degrees",
+    "target_angles": {
+      "shoulder_protraction_degrees": 15
+    },
+    "tolerances": {
+      "shoulder_protraction_degrees": 5
+    },
+    "tempo_seconds": "2-2-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Start in push-up position with arms straight",
+      "Without bending elbows, push shoulder blades apart",
+      "Then let shoulder blades come together — feel the squeeze"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "elbow_bend",
+        "detection": "elbows flex during the movement",
+        "landmarks": [11, 13, 15],
+        "severity": "yellow"
+      },
+      {
+        "name": "hip_sag",
+        "detection": "hips drop below shoulder-ankle line",
+        "landmarks": [11, 23, 27],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["wrist_fracture_recent", "acute_rotator_cuff_tear"],
+    "regression": "Perform on knees or against wall",
+    "progression": "Add a push-up between each scapular rep"
+  },
+  {
+    "id": "shoulder_er_standing_band_01",
+    "name": "Standing External Rotation with Band",
+    "body_region": "shoulder",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band", "door_anchor"],
+    "target_muscles": ["infraspinatus", "teres_minor"],
+    "primary_joint_angle": "shoulder_external_rotation_degrees",
+    "target_angles": {
+      "shoulder_external_rotation_degrees": 65,
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_external_rotation_degrees": 10,
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Keep elbow tucked at your side with a towel roll",
+      "Pull band outward rotating forearm away from body",
+      "Return slowly — control the band"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "elbow_drift",
+        "detection": "elbow lifts away from side during rotation",
+        "landmarks": [13, 11, 23],
+        "severity": "yellow"
+      },
+      {
+        "name": "wrist_deviation",
+        "detection": "wrist bends instead of forearm rotating",
+        "landmarks": [15, 13],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_rotator_cuff_tear"],
+    "regression": "Use lighter band",
+    "progression": "Use heavier band or add towel roll for more ROM"
+  },
+  {
+    "id": "wall_angel_01",
+    "name": "Wall Angels",
+    "body_region": "shoulder",
+    "category": "mobility",
+    "difficulty_tier": 2,
+    "equipment": ["wall"],
+    "target_muscles": ["lower_trapezius", "serratus_anterior", "rotator_cuff"],
+    "primary_joint_angle": "shoulder_flexion_degrees",
+    "target_angles": {
+      "shoulder_flexion_degrees": 160,
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_flexion_degrees": 15,
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "4-1-4-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Stand with back flat against wall, arms in goalpost position",
+      "Slide arms up the wall keeping wrists and elbows in contact",
+      "Go only as high as you can while maintaining wall contact"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_extension",
+        "detection": "low back loses contact with wall during overhead reach",
+        "landmarks": [23, 11],
+        "severity": "red"
+      },
+      {
+        "name": "arm_lift_off",
+        "detection": "wrists or elbows lose contact with wall",
+        "landmarks": [15, 13],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["frozen_shoulder_acute", "impingement_acute"],
+    "regression": "Reduce range — stay below shoulder height",
+    "progression": "Add light wrist weights"
+  },
+  {
+    "id": "sleeper_stretch_01",
+    "name": "Sleeper Stretch",
+    "body_region": "shoulder",
+    "category": "stretching",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["infraspinatus", "teres_minor", "posterior_capsule"],
+    "primary_joint_angle": "shoulder_internal_rotation_degrees",
+    "target_angles": {
+      "shoulder_internal_rotation_degrees": 60,
+      "elbow_flexion_degrees": 90
+    },
+    "tolerances": {
+      "shoulder_internal_rotation_degrees": 15,
+      "elbow_flexion_degrees": 10
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Lie on your affected side with arm at 90 degrees",
+      "Use opposite hand to gently push forearm toward floor",
+      "Stop when you feel a comfortable stretch in the back of your shoulder"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_roll",
+        "detection": "body rolls backward away from the stretch",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["anterior_shoulder_instability", "labral_tear_acute"],
+    "regression": "Reduce pressure, shorter hold (15s)",
+    "progression": "Increase hold to 45 seconds"
+  },
+
+  {
+    "id": "quad_set_01",
+    "name": "Quad Set",
+    "body_region": "knee",
+    "category": "stabilization",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["quadriceps", "vastus_medialis_oblique"],
+    "primary_joint_angle": "knee_extension_degrees",
+    "target_angles": {
+      "knee_extension_degrees": 0
+    },
+    "tolerances": {
+      "knee_extension_degrees": 5
+    },
+    "tempo_seconds": "0-10-0-5",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Sit with leg straight, push the back of your knee into the mat",
+      "Tighten your thigh muscle — try to lift your heel slightly",
+      "Hold for 10 seconds, then relax"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_flexor_substitution",
+        "detection": "hip flexion occurs instead of isolated quad contraction",
+        "landmarks": [23, 25],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_patellar_fracture"],
+    "regression": "Place towel roll under knee for slight flexion",
+    "progression": "Add ankle weight"
+  },
+  {
+    "id": "straight_leg_raise_supine_01",
+    "name": "Supine Straight Leg Raise",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["quadriceps", "hip_flexors"],
+    "primary_joint_angle": "hip_flexion_degrees",
+    "target_angles": {
+      "hip_flexion_degrees": 45,
+      "knee_extension_degrees": 0
+    },
+    "tolerances": {
+      "hip_flexion_degrees": 10,
+      "knee_extension_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Tighten your quad first, then lift the whole leg",
+      "Keep your knee completely straight",
+      "Lift to about 45 degrees, then lower slowly"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_bend",
+        "detection": "knee flexion exceeds 10 degrees during lift",
+        "landmarks": [23, 25, 27],
+        "severity": "yellow"
+      },
+      {
+        "name": "pelvis_rotation",
+        "detection": "pelvis tilts or rotates during leg raise",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_flexor_strain", "acute_lumbar_disc_herniation"],
+    "regression": "Reduce height of lift",
+    "progression": "Add 2lb ankle weight"
+  },
+  {
+    "id": "slr_sidelying_01",
+    "name": "Sidelying Straight Leg Raise",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_medius", "tensor_fasciae_latae"],
+    "primary_joint_angle": "hip_abduction_degrees",
+    "target_angles": {
+      "hip_abduction_degrees": 30,
+      "knee_extension_degrees": 0
+    },
+    "tolerances": {
+      "hip_abduction_degrees": 10,
+      "knee_extension_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Lie on your side with legs straight and stacked",
+      "Lift top leg toward ceiling, keeping knee straight",
+      "Lower with control — don't drop it"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_flexion_substitution",
+        "detection": "leg moves forward instead of straight up during abduction",
+        "landmarks": [23, 25, 27],
+        "severity": "yellow"
+      },
+      {
+        "name": "trunk_roll",
+        "detection": "body rolls backward during lift",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["greater_trochanter_bursitis_acute"],
+    "regression": "Reduce range of motion",
+    "progression": "Add ankle weight"
+  },
+  {
+    "id": "heel_slide_01",
+    "name": "Heel Slides",
+    "body_region": "knee",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["quadriceps", "hamstrings"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 20
+    },
+    "tempo_seconds": "4-1-4-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lie on your back and slide your heel toward your buttock",
+      "Bend your knee as far as comfortable",
+      "Slide back out slowly to straight"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_hike",
+        "detection": "pelvis tilts during heel slide",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_knee_effusion_severe"],
+    "regression": "Use a towel under the heel to reduce friction",
+    "progression": "Increase target flexion angle"
+  },
+  {
+    "id": "mini_squat_01",
+    "name": "Mini Squat",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["chair"],
+    "target_muscles": ["quadriceps", "gluteus_maximus", "hamstrings"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 45,
+      "hip_flexion_degrees": 40
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Stand holding back of chair for balance",
+      "Bend knees to about 45 degrees — like sitting into a shallow chair",
+      "Keep knees over toes, not caving inward"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_valgus",
+        "detection": "knees collapse inward past the line of the toes",
+        "landmarks": [25, 27, 31],
+        "severity": "red"
+      },
+      {
+        "name": "forward_trunk_lean",
+        "detection": "trunk leans forward excessively",
+        "landmarks": [11, 23, 25],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_meniscus_tear", "acute_pcl_tear"],
+    "regression": "Reduce squat depth to 30 degrees",
+    "progression": "Remove hand support, increase depth"
+  },
+  {
+    "id": "step_up_01",
+    "name": "Step-Up",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["step_platform"],
+    "target_muscles": ["quadriceps", "gluteus_maximus", "hamstrings"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 60,
+      "hip_flexion_degrees": 50
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Place entire foot on step, then push through the heel",
+      "Stand all the way up on the step — fully extend your knee",
+      "Lower back down slowly, controlling the descent"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_valgus",
+        "detection": "knee collapses inward during step-up",
+        "landmarks": [25, 27, 31],
+        "severity": "red"
+      },
+      {
+        "name": "push_off_trailing_leg",
+        "detection": "trailing leg pushes off floor to assist",
+        "landmarks": [26, 28, 32],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_patellar_tendinopathy", "acute_meniscus_tear"],
+    "regression": "Use lower step height (4 inches)",
+    "progression": "Hold dumbbells, increase step height"
+  },
+  {
+    "id": "step_down_01",
+    "name": "Step-Down (Forward)",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["step_platform"],
+    "target_muscles": ["quadriceps", "gluteus_medius", "gluteus_maximus"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 50,
+      "hip_flexion_degrees": 40
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "4-0-2-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Stand on step, slowly lower opposite foot toward the floor",
+      "Keep your stance knee tracking over your second toe",
+      "Touch heel lightly to the floor, then return up"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_valgus",
+        "detection": "stance knee collapses inward during descent",
+        "landmarks": [25, 27, 31],
+        "severity": "red"
+      },
+      {
+        "name": "trunk_lateral_lean",
+        "detection": "trunk shifts laterally over stance leg",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_patellar_tendinopathy", "acute_acl_tear"],
+    "regression": "Reduce step height, hold railing",
+    "progression": "Increase step height to 8 inches"
+  },
+  {
+    "id": "terminal_knee_extension_01",
+    "name": "Terminal Knee Extension",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["vastus_medialis_oblique", "quadriceps"],
+    "primary_joint_angle": "knee_extension_degrees",
+    "target_angles": {
+      "knee_extension_degrees": 0
+    },
+    "tolerances": {
+      "knee_extension_degrees": 5
+    },
+    "tempo_seconds": "2-2-2-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Loop band behind your knee, stand facing the anchor",
+      "Start with knee slightly bent, then straighten fully",
+      "Squeeze your quad hard at full extension and hold 2 seconds"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hyperextension",
+        "detection": "knee pushes past 0 degrees into hyperextension",
+        "landmarks": [23, 25, 27],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_pcl_reconstruction"],
+    "regression": "Use lighter band",
+    "progression": "Use heavier band"
+  },
+  {
+    "id": "hamstring_curl_prone_01",
+    "name": "Prone Hamstring Curl",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat", "ankle_weight"],
+    "target_muscles": ["hamstrings", "gastrocnemius"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Lie face down and bend your knee, bringing heel toward buttock",
+      "Squeeze your hamstring at the top",
+      "Lower slowly — control the weight down"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_flexion",
+        "detection": "hip lifts off mat during knee flexion",
+        "landmarks": [23, 25],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_extension",
+        "detection": "low back arches excessively during curl",
+        "landmarks": [23, 11],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hamstring_strain"],
+    "regression": "No ankle weight, gravity only",
+    "progression": "Increase ankle weight"
+  },
+  {
+    "id": "single_leg_squat_01",
+    "name": "Single-Leg Squat to Chair",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 4,
+    "equipment": ["chair"],
+    "target_muscles": ["quadriceps", "gluteus_maximus", "gluteus_medius"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 70,
+      "hip_flexion_degrees": 60
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "4-1-3-0",
+    "default_sets": 3,
+    "default_reps": 6,
+    "cues": [
+      "Stand on one leg in front of a chair",
+      "Slowly sit down to the chair, then stand back up on one leg",
+      "Keep your knee tracking over your second toe"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_valgus",
+        "detection": "knee dives inward past midline of foot",
+        "landmarks": [25, 27, 31],
+        "severity": "red"
+      },
+      {
+        "name": "trunk_lateral_lean",
+        "detection": "trunk shifts excessively over stance leg",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      },
+      {
+        "name": "contralateral_hip_drop",
+        "detection": "opposite side pelvis drops during squat",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_acl_reconstruction_early", "acute_meniscus_tear"],
+    "regression": "Use arms for balance, reduce depth",
+    "progression": "Remove chair, increase depth"
+  },
+  {
+    "id": "lateral_band_walk_knee_01",
+    "name": "Lateral Band Walk",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["gluteus_medius", "gluteus_minimus", "tensor_fasciae_latae"],
+    "primary_joint_angle": "hip_abduction_degrees",
+    "target_angles": {
+      "hip_abduction_degrees": 20,
+      "knee_flexion_degrees": 30
+    },
+    "tolerances": {
+      "hip_abduction_degrees": 10,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "2-0-2-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Place band around ankles, feet shoulder-width apart",
+      "Stay in a mini-squat position and step sideways",
+      "Keep tension on the band — don't let feet come together"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_lateral_sway",
+        "detection": "trunk shifts laterally with each step",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      },
+      {
+        "name": "toe_out_walking",
+        "detection": "feet externally rotate during side-stepping",
+        "landmarks": [27, 31, 28, 32],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_it_band_syndrome"],
+    "regression": "Place band above knees instead of ankles",
+    "progression": "Use heavier band, deeper squat position"
+  },
+  {
+    "id": "wall_sit_01",
+    "name": "Wall Sit",
+    "body_region": "knee",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["wall"],
+    "target_muscles": ["quadriceps", "gluteus_maximus"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 60,
+      "hip_flexion_degrees": 60
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 15,
+      "hip_flexion_degrees": 15
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Lean against wall and slide down until thighs approach parallel",
+      "Keep your knees over your ankles, not past your toes",
+      "Press your low back into the wall"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_forward_drift",
+        "detection": "knees move anterior past the toes",
+        "landmarks": [25, 27, 31],
+        "severity": "yellow"
+      },
+      {
+        "name": "asymmetric_loading",
+        "detection": "body shifts weight to one leg",
+        "landmarks": [23, 24, 25, 26],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_patellar_tendinopathy", "acute_patellofemoral_syndrome"],
+    "regression": "Higher position (less knee bend), shorter hold",
+    "progression": "Deeper position, longer hold (60s)"
+  },
+  {
+    "id": "bulgarian_split_squat_01",
+    "name": "Bulgarian Split Squat",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 4,
+    "equipment": ["bench"],
+    "target_muscles": ["quadriceps", "gluteus_maximus", "hip_flexors"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 90,
+      "hip_flexion_degrees": 70
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Place rear foot on bench behind you, laces down",
+      "Lower straight down until front thigh is parallel to floor",
+      "Push through front heel to stand back up"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_valgus",
+        "detection": "front knee collapses inward during descent",
+        "landmarks": [25, 27, 31],
+        "severity": "red"
+      },
+      {
+        "name": "forward_lean",
+        "detection": "trunk leans forward excessively",
+        "landmarks": [11, 23, 25],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_acl_reconstruction_early", "acute_patellar_tendinopathy"],
+    "regression": "Hold onto support, reduce depth",
+    "progression": "Hold dumbbells"
+  },
+  {
+    "id": "clamshell_knee_01",
+    "name": "Clamshell (Knee Focus)",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_medius", "gluteus_minimus", "external_hip_rotators"],
+    "primary_joint_angle": "hip_external_rotation_degrees",
+    "target_angles": {
+      "hip_external_rotation_degrees": 35,
+      "hip_flexion_degrees": 45
+    },
+    "tolerances": {
+      "hip_external_rotation_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "2-2-2-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Lie on your side with hips and knees bent to 45 degrees",
+      "Keeping feet together, lift your top knee toward ceiling",
+      "Don't let your pelvis roll backward"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "pelvis_roll",
+        "detection": "pelvis rotates backward during hip opening",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Reduce range of motion",
+    "progression": "Add resistance band around knees"
+  },
+  {
+    "id": "seated_knee_extension_01",
+    "name": "Seated Knee Extension",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["chair", "ankle_weight"],
+    "target_muscles": ["quadriceps"],
+    "primary_joint_angle": "knee_extension_degrees",
+    "target_angles": {
+      "knee_extension_degrees": 0
+    },
+    "tolerances": {
+      "knee_extension_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Sit tall in a chair, straighten your knee fully",
+      "Hold at the top for 2 seconds, squeezing your quad",
+      "Lower slowly with control"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_lean_back",
+        "detection": "trunk leans backward to assist extension",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_patellofemoral_syndrome_severe"],
+    "regression": "No ankle weight, smaller ROM",
+    "progression": "Heavier ankle weight"
+  },
+  {
+    "id": "nordic_hamstring_curl_01",
+    "name": "Nordic Hamstring Curl",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 5,
+    "equipment": ["mat", "partner_or_anchor"],
+    "target_muscles": ["hamstrings"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 30
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 15
+    },
+    "tempo_seconds": "5-0-1-0",
+    "default_sets": 3,
+    "default_reps": 5,
+    "cues": [
+      "Kneel with ankles anchored, body tall from knees to head",
+      "Slowly lean forward, controlling descent with hamstrings",
+      "Catch yourself with hands and push back up to start"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_flexion_break",
+        "detection": "hips bend forward instead of staying straight",
+        "landmarks": [11, 23, 25],
+        "severity": "red"
+      },
+      {
+        "name": "lumbar_hyperextension",
+        "detection": "low back arches during descent",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hamstring_strain", "acute_acl_reconstruction_early"],
+    "regression": "Use a band for assistance, reduce descent range",
+    "progression": "Increase eccentric range, add weight vest"
+  },
+  {
+    "id": "knee_flexion_prone_01",
+    "name": "Prone Knee Flexion ROM",
+    "body_region": "knee",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["quadriceps", "hamstrings"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 120
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 20
+    },
+    "tempo_seconds": "4-2-4-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lie face down and slowly bend your knee, heel toward buttock",
+      "Use a strap around ankle to assist if needed",
+      "Go to comfortable end range and hold briefly"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_hiking",
+        "detection": "pelvis lifts off mat on the bending side",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_knee_effusion_severe", "acute_pcl_tear"],
+    "regression": "Assist with strap, reduce range",
+    "progression": "Increase target range, add overpressure"
+  },
+  {
+    "id": "standing_hamstring_curl_01",
+    "name": "Standing Hamstring Curl",
+    "body_region": "knee",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["chair"],
+    "target_muscles": ["hamstrings"],
+    "primary_joint_angle": "knee_flexion_degrees",
+    "target_angles": {
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Hold chair for balance, bend knee bringing heel to buttock",
+      "Keep thighs parallel — don't let knee drift forward",
+      "Lower slowly with control"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_flexion",
+        "detection": "thigh moves forward during curl",
+        "landmarks": [23, 25],
+        "severity": "yellow"
+      },
+      {
+        "name": "trunk_forward_lean",
+        "detection": "trunk tilts forward during curl",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hamstring_strain"],
+    "regression": "Reduce range of motion",
+    "progression": "Add ankle weight"
+  },
+
+  {
+    "id": "clamshell_hip_01",
+    "name": "Clamshell",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_medius", "gluteus_minimus", "external_hip_rotators"],
+    "primary_joint_angle": "hip_external_rotation_degrees",
+    "target_angles": {
+      "hip_external_rotation_degrees": 40,
+      "hip_flexion_degrees": 45
+    },
+    "tolerances": {
+      "hip_external_rotation_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "2-2-2-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Lie on side with knees bent and feet together",
+      "Open your top knee like a clamshell without rolling your pelvis",
+      "Slowly close with control"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "pelvis_roll",
+        "detection": "pelvis rolls backward during knee lift",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      },
+      {
+        "name": "foot_lift",
+        "detection": "top foot separates from bottom foot",
+        "landmarks": [31, 32],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Smaller range of motion",
+    "progression": "Add resistance band around knees"
+  },
+  {
+    "id": "glute_bridge_01",
+    "name": "Glute Bridge",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_maximus", "hamstrings"],
+    "primary_joint_angle": "hip_extension_degrees",
+    "target_angles": {
+      "hip_extension_degrees": 0,
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_extension_degrees": 5,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Lie on back with knees bent and feet flat",
+      "Push through heels to lift hips until body forms a straight line",
+      "Squeeze glutes at the top and hold 2 seconds"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hamstring_dominance",
+        "detection": "cramping in hamstrings indicates glute underactivation",
+        "landmarks": [23, 25, 27],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_hyperextension",
+        "detection": "hips lift too high causing low back arch",
+        "landmarks": [11, 23, 25],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_sacroiliac_dysfunction"],
+    "regression": "Reduce range, shorter hold",
+    "progression": "Add weight across hips"
+  },
+  {
+    "id": "single_leg_bridge_01",
+    "name": "Single-Leg Glute Bridge",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_maximus", "hamstrings", "core"],
+    "primary_joint_angle": "hip_extension_degrees",
+    "target_angles": {
+      "hip_extension_degrees": 0,
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_extension_degrees": 5,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Extend one leg straight, push through the planted heel",
+      "Lift hips until body is straight from shoulders to knee",
+      "Keep pelvis level — don't let the unsupported side drop"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "pelvis_drop",
+        "detection": "unsupported side of pelvis drops during bridge",
+        "landmarks": [23, 24],
+        "severity": "red"
+      },
+      {
+        "name": "lumbar_hyperextension",
+        "detection": "excessive arching in low back at top of bridge",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_sacroiliac_dysfunction", "acute_hamstring_strain"],
+    "regression": "Perform double-leg bridge",
+    "progression": "Add weight across hips, increase hold time"
+  },
+  {
+    "id": "hip_flexor_stretch_half_kneel_01",
+    "name": "Half-Kneeling Hip Flexor Stretch",
+    "body_region": "hip",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["iliopsoas", "rectus_femoris"],
+    "primary_joint_angle": "hip_extension_degrees",
+    "target_angles": {
+      "hip_extension_degrees": 10,
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_extension_degrees": 10,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Kneel on one knee with the other foot forward",
+      "Gently shift hips forward until you feel a stretch in front of the back hip",
+      "Keep your trunk upright — do not lean forward"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_extension",
+        "detection": "low back arches instead of hip extending",
+        "landmarks": [11, 23],
+        "severity": "red"
+      },
+      {
+        "name": "anterior_pelvic_tilt",
+        "detection": "pelvis tilts forward excessively",
+        "landmarks": [23, 24, 11],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_labral_tear"],
+    "regression": "Place hands on chair for support, less lunge depth",
+    "progression": "Add overhead reach to increase stretch"
+  },
+  {
+    "id": "fire_hydrant_01",
+    "name": "Fire Hydrant",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_medius", "gluteus_minimus", "external_hip_rotators"],
+    "primary_joint_angle": "hip_abduction_degrees",
+    "target_angles": {
+      "hip_abduction_degrees": 35,
+      "hip_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_abduction_degrees": 10,
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Start on hands and knees, keep knee bent at 90 degrees",
+      "Lift knee out to the side like a dog at a fire hydrant",
+      "Keep your hips level — don't shift to the opposite side"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_lateral_shift",
+        "detection": "trunk shifts away from lifting leg",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_rotation",
+        "detection": "spine rotates during hip abduction",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_labral_tear"],
+    "regression": "Reduce range of motion",
+    "progression": "Add resistance band around knees"
+  },
+  {
+    "id": "lateral_band_walk_hip_01",
+    "name": "Hip Lateral Band Walk",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["gluteus_medius", "gluteus_minimus", "tensor_fasciae_latae"],
+    "primary_joint_angle": "hip_abduction_degrees",
+    "target_angles": {
+      "hip_abduction_degrees": 20,
+      "knee_flexion_degrees": 25
+    },
+    "tolerances": {
+      "hip_abduction_degrees": 10,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "2-0-2-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Band around ankles, mini-squat position",
+      "Step sideways leading with your heel",
+      "Maintain constant tension on the band — never let it go slack"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_sway",
+        "detection": "trunk leans side to side with each step",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      },
+      {
+        "name": "knee_valgus",
+        "detection": "knees cave inward during walking",
+        "landmarks": [25, 27, 26, 28],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_it_band_syndrome"],
+    "regression": "Band above knees, stand taller",
+    "progression": "Heavier band, deeper squat position"
+  },
+  {
+    "id": "hip_hinge_01",
+    "name": "Hip Hinge (RDL Pattern)",
+    "body_region": "hip",
+    "category": "neuromuscular",
+    "difficulty_tier": 2,
+    "equipment": ["dowel"],
+    "target_muscles": ["gluteus_maximus", "hamstrings", "erector_spinae"],
+    "primary_joint_angle": "hip_flexion_degrees",
+    "target_angles": {
+      "hip_flexion_degrees": 70,
+      "knee_flexion_degrees": 15
+    },
+    "tolerances": {
+      "hip_flexion_degrees": 10,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Hold dowel along spine — contact at head, upper back, and tailbone",
+      "Push hips straight back while keeping spine neutral",
+      "Stand by squeezing glutes to drive hips forward"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_flexion",
+        "detection": "low back rounds — dowel loses contact at tailbone",
+        "landmarks": [11, 23],
+        "severity": "red"
+      },
+      {
+        "name": "knee_forward_drift",
+        "detection": "knees bend excessively, converting hinge to squat",
+        "landmarks": [25, 27, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_lumbar_disc_herniation", "acute_hamstring_strain"],
+    "regression": "Reduce range, touch wall behind with hips",
+    "progression": "Add light dumbbell or kettlebell"
+  },
+  {
+    "id": "hip_abduction_sidelying_01",
+    "name": "Sidelying Hip Abduction",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_medius", "gluteus_minimus"],
+    "primary_joint_angle": "hip_abduction_degrees",
+    "target_angles": {
+      "hip_abduction_degrees": 30
+    },
+    "tolerances": {
+      "hip_abduction_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Lie on your side with legs straight and stacked",
+      "Lift top leg toward ceiling, leading with heel",
+      "Keep toes pointed forward or slightly down — do not rotate outward"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_flexion_substitution",
+        "detection": "leg drifts forward during abduction",
+        "landmarks": [23, 25, 27],
+        "severity": "yellow"
+      },
+      {
+        "name": "trunk_roll",
+        "detection": "body rolls backward",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["greater_trochanter_bursitis_acute"],
+    "regression": "Reduce range of motion",
+    "progression": "Add ankle weight"
+  },
+  {
+    "id": "prone_hip_extension_01",
+    "name": "Prone Hip Extension",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_maximus", "hamstrings"],
+    "primary_joint_angle": "hip_extension_degrees",
+    "target_angles": {
+      "hip_extension_degrees": 15
+    },
+    "tolerances": {
+      "hip_extension_degrees": 5
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lie face down with legs straight",
+      "Squeeze your glute and lift one leg off the mat",
+      "Keep your pelvis pressed into the mat — no rocking"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_hyperextension",
+        "detection": "low back arches excessively during leg lift",
+        "landmarks": [11, 23],
+        "severity": "red"
+      },
+      {
+        "name": "pelvis_rotation",
+        "detection": "pelvis rotates during hip extension",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_low_back_pain", "acute_hip_labral_tear"],
+    "regression": "Bend knee to 90 degrees, then extend hip",
+    "progression": "Add ankle weight"
+  },
+  {
+    "id": "pigeon_stretch_01",
+    "name": "Pigeon Stretch",
+    "body_region": "hip",
+    "category": "stretching",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["piriformis", "gluteus_medius", "external_hip_rotators"],
+    "primary_joint_angle": "hip_external_rotation_degrees",
+    "target_angles": {
+      "hip_external_rotation_degrees": 50,
+      "hip_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_external_rotation_degrees": 15,
+      "hip_flexion_degrees": 15
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "From hands and knees, bring one knee forward and lay shin across the mat",
+      "Extend the other leg straight behind you",
+      "Lower your body forward over the front leg until you feel a deep stretch"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "pelvis_tilt",
+        "detection": "pelvis tilts to one side instead of staying square",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_labral_tear", "acute_knee_injury"],
+    "regression": "Perform figure-4 stretch supine instead",
+    "progression": "Lean further forward, increase hold to 60 seconds"
+  },
+  {
+    "id": "ninety_ninety_position_01",
+    "name": "90/90 Hip Position",
+    "body_region": "hip",
+    "category": "mobility",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["internal_hip_rotators", "external_hip_rotators", "hip_adductors"],
+    "primary_joint_angle": "hip_internal_rotation_degrees",
+    "target_angles": {
+      "hip_internal_rotation_degrees": 45,
+      "hip_external_rotation_degrees": 45
+    },
+    "tolerances": {
+      "hip_internal_rotation_degrees": 15,
+      "hip_external_rotation_degrees": 15
+    },
+    "tempo_seconds": "0-20-0-0",
+    "default_sets": 3,
+    "default_reps": 3,
+    "cues": [
+      "Sit with both knees bent at 90 degrees — one in front, one to the side",
+      "Sit tall and rotate between internal and external rotation positions",
+      "Try to keep both sit bones on the floor"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_lean",
+        "detection": "trunk leans heavily to one side for support",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_labral_tear", "femoroacetabular_impingement_acute"],
+    "regression": "Place hands behind for support",
+    "progression": "Add forward lean to increase stretch"
+  },
+  {
+    "id": "copenhagen_adduction_01",
+    "name": "Copenhagen Adduction",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 4,
+    "equipment": ["bench"],
+    "target_muscles": ["hip_adductors", "adductor_longus", "gracilis"],
+    "primary_joint_angle": "hip_adduction_degrees",
+    "target_angles": {
+      "hip_adduction_degrees": 0
+    },
+    "tolerances": {
+      "hip_adduction_degrees": 5
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 6,
+    "cues": [
+      "Side plank with top leg on bench, bottom leg hanging",
+      "Lift bottom leg up to meet the bench",
+      "Keep body in a straight line — don't let hips sag"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_sag",
+        "detection": "hips drop below the line of shoulders and feet",
+        "landmarks": [11, 23, 27],
+        "severity": "red"
+      },
+      {
+        "name": "trunk_rotation",
+        "detection": "trunk rotates forward or backward during hold",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_groin_strain", "acute_adductor_tear"],
+    "regression": "Bend bottom knee, shorter hold, use short lever",
+    "progression": "Full lever with straight legs, add pulses"
+  },
+  {
+    "id": "standing_hip_flexion_01",
+    "name": "Standing Hip Flexion",
+    "body_region": "hip",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": [],
+    "target_muscles": ["iliopsoas", "rectus_femoris"],
+    "primary_joint_angle": "hip_flexion_degrees",
+    "target_angles": {
+      "hip_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Stand tall and lift your knee toward your chest",
+      "Keep your trunk upright — don't lean backward",
+      "Lower slowly with control"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_lean_back",
+        "detection": "trunk leans backward during hip flexion",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_flexion",
+        "detection": "low back rounds during standing hip flexion",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_flexor_strain"],
+    "regression": "Hold onto support, reduce height",
+    "progression": "Add ankle weight"
+  },
+  {
+    "id": "hip_internal_rotation_seated_01",
+    "name": "Seated Hip Internal Rotation",
+    "body_region": "hip",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["chair"],
+    "target_muscles": ["internal_hip_rotators", "gluteus_medius"],
+    "primary_joint_angle": "hip_internal_rotation_degrees",
+    "target_angles": {
+      "hip_internal_rotation_degrees": 35
+    },
+    "tolerances": {
+      "hip_internal_rotation_degrees": 10
+    },
+    "tempo_seconds": "0-20-0-0",
+    "default_sets": 3,
+    "default_reps": 3,
+    "cues": [
+      "Sit on a chair with knees bent 90 degrees",
+      "Keeping your knee still, swing your foot outward (rotating hip inward)",
+      "Hold at end range, feeling the stretch in outer hip"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "pelvis_lift",
+        "detection": "same-side buttock lifts off chair",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["femoroacetabular_impingement_acute"],
+    "regression": "Reduce range of motion",
+    "progression": "Apply gentle overpressure at ankle"
+  },
+  {
+    "id": "supine_figure_four_stretch_01",
+    "name": "Supine Figure-4 Stretch",
+    "body_region": "hip",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["piriformis", "gluteus_medius", "external_hip_rotators"],
+    "primary_joint_angle": "hip_external_rotation_degrees",
+    "target_angles": {
+      "hip_external_rotation_degrees": 40,
+      "hip_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_external_rotation_degrees": 10,
+      "hip_flexion_degrees": 15
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Lie on back, cross one ankle over opposite knee",
+      "Pull the uncrossed leg toward your chest",
+      "Keep your low back flat on the mat"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_flexion",
+        "detection": "low back rounds off mat during pull",
+        "landmarks": [23, 11],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_labral_tear"],
+    "regression": "Shorter hold, less pull",
+    "progression": "Increase hold to 45 seconds"
+  },
+  {
+    "id": "hip_circles_01",
+    "name": "Standing Hip Circles",
+    "body_region": "hip",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["hip_flexors", "hip_extensors", "hip_abductors", "hip_adductors"],
+    "primary_joint_angle": "hip_flexion_degrees",
+    "target_angles": {
+      "hip_flexion_degrees": 90,
+      "hip_abduction_degrees": 30
+    },
+    "tolerances": {
+      "hip_flexion_degrees": 15,
+      "hip_abduction_degrees": 10
+    },
+    "tempo_seconds": "2-0-2-0",
+    "default_sets": 2,
+    "default_reps": 10,
+    "cues": [
+      "Stand on one leg, holding support if needed",
+      "Draw large circles with your knee, going forward, out, back, and in",
+      "Reverse direction after each set"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_sway",
+        "detection": "trunk sways excessively during circles",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_hip_labral_tear"],
+    "regression": "Smaller circles, hold support",
+    "progression": "Larger circles, no support"
+  },
+
+  {
+    "id": "dead_bug_01",
+    "name": "Dead Bug",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["transversus_abdominis", "rectus_abdominis", "obliques"],
+    "primary_joint_angle": "hip_flexion_degrees",
+    "target_angles": {
+      "hip_flexion_degrees": 90,
+      "knee_flexion_degrees": 90,
+      "shoulder_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_flexion_degrees": 10,
+      "knee_flexion_degrees": 10,
+      "shoulder_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Lie on back with arms toward ceiling, hips and knees at 90 degrees",
+      "Lower opposite arm and leg slowly toward the floor",
+      "Press your low back flat into the mat — it should not arch"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_extension",
+        "detection": "low back arches off mat during arm/leg extension",
+        "landmarks": [11, 23],
+        "severity": "red"
+      },
+      {
+        "name": "rib_flare",
+        "detection": "ribcage flares upward as arms extend overhead",
+        "landmarks": [11, 12],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_lumbar_disc_herniation"],
+    "regression": "Move only arms or only legs, not both",
+    "progression": "Hold light dumbbell, add ankle weight"
+  },
+  {
+    "id": "bird_dog_01",
+    "name": "Bird Dog",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["erector_spinae", "multifidus", "gluteus_maximus", "core"],
+    "primary_joint_angle": "hip_extension_degrees",
+    "target_angles": {
+      "hip_extension_degrees": 0,
+      "shoulder_flexion_degrees": 170
+    },
+    "tolerances": {
+      "hip_extension_degrees": 5,
+      "shoulder_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-3-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Start on hands and knees, spine in neutral",
+      "Extend opposite arm and leg until parallel with the floor",
+      "Hold for 3 seconds — no rotation in your trunk"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_extension",
+        "detection": "low back sags below neutral during leg extension",
+        "landmarks": [11, 23],
+        "severity": "red"
+      },
+      {
+        "name": "trunk_rotation",
+        "detection": "trunk rotates when lifting arm/leg",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_wrist_injury"],
+    "regression": "Lift only arm or only leg",
+    "progression": "Add ankle weight, increase hold time"
+  },
+  {
+    "id": "prone_press_up_01",
+    "name": "Prone Press-Up (McKenzie Extension)",
+    "body_region": "lumbar",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["erector_spinae"],
+    "primary_joint_angle": "lumbar_extension_degrees",
+    "target_angles": {
+      "lumbar_extension_degrees": 30
+    },
+    "tolerances": {
+      "lumbar_extension_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lie face down, hands under shoulders",
+      "Press up straightening elbows while keeping hips on the mat",
+      "Let your low back sag — do not engage your glutes"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_lift",
+        "detection": "hips lift off the mat during press-up",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      },
+      {
+        "name": "shoulder_shrug",
+        "detection": "shoulders elevate toward ears during press-up",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["spinal_stenosis_severe", "spondylolisthesis_unstable"],
+    "regression": "Press up on forearms only (sphinx position)",
+    "progression": "Full elbow extension, sustained hold at top"
+  },
+  {
+    "id": "cat_cow_01",
+    "name": "Cat-Cow",
+    "body_region": "lumbar",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["erector_spinae", "rectus_abdominis", "multifidus"],
+    "primary_joint_angle": "lumbar_flexion_degrees",
+    "target_angles": {
+      "lumbar_flexion_degrees": 30,
+      "lumbar_extension_degrees": 20
+    },
+    "tolerances": {
+      "lumbar_flexion_degrees": 10,
+      "lumbar_extension_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-1",
+    "default_sets": 2,
+    "default_reps": 10,
+    "cues": [
+      "Start on hands and knees, spine neutral",
+      "Cat: Round your back toward ceiling, tuck chin to chest",
+      "Cow: Drop belly toward floor, lift head and tailbone"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "cervical_hyperextension",
+        "detection": "neck extends excessively during cow position",
+        "landmarks": [0, 11],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_wrist_fracture"],
+    "regression": "Smaller range of motion",
+    "progression": "Add segmental control — move one vertebra at a time"
+  },
+  {
+    "id": "pelvic_tilt_supine_01",
+    "name": "Supine Pelvic Tilt",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["transversus_abdominis", "rectus_abdominis", "gluteus_maximus"],
+    "primary_joint_angle": "pelvic_tilt_degrees",
+    "target_angles": {
+      "pelvic_tilt_degrees": 10
+    },
+    "tolerances": {
+      "pelvic_tilt_degrees": 5
+    },
+    "tempo_seconds": "2-5-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lie on your back with knees bent, feet flat",
+      "Flatten your low back into the mat by tilting your pelvis",
+      "Hold for 5 seconds, then relax"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "breath_holding",
+        "detection": "visible apnea during hold — chest stops moving",
+        "landmarks": [11, 12],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Shorter hold time",
+    "progression": "Add marching while maintaining tilt"
+  },
+  {
+    "id": "mcgill_curl_up_01",
+    "name": "McGill Curl-Up",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["rectus_abdominis", "obliques"],
+    "primary_joint_angle": "trunk_flexion_degrees",
+    "target_angles": {
+      "trunk_flexion_degrees": 15
+    },
+    "tolerances": {
+      "trunk_flexion_degrees": 5
+    },
+    "tempo_seconds": "2-10-2-0",
+    "default_sets": 3,
+    "default_reps": 5,
+    "cues": [
+      "Lie on back, one knee bent, one leg straight, hands under low back",
+      "Lift head and shoulders just barely off the mat",
+      "Hold for 10 seconds — your low back should not move"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "neck_flexion",
+        "detection": "chin tucks excessively toward chest",
+        "landmarks": [0, 11],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_flexion",
+        "detection": "low back flattens or flexes during curl-up",
+        "landmarks": [23, 11],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_lumbar_disc_herniation"],
+    "regression": "Shorter hold time (5s)",
+    "progression": "Increase hold to 15 seconds"
+  },
+  {
+    "id": "side_plank_01",
+    "name": "Side Plank (McGill)",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 3,
+    "equipment": ["mat"],
+    "target_muscles": ["obliques", "quadratus_lumborum", "gluteus_medius"],
+    "primary_joint_angle": "trunk_lateral_flexion_degrees",
+    "target_angles": {
+      "trunk_lateral_flexion_degrees": 0
+    },
+    "tolerances": {
+      "trunk_lateral_flexion_degrees": 5
+    },
+    "tempo_seconds": "0-20-0-0",
+    "default_sets": 3,
+    "default_reps": 3,
+    "cues": [
+      "Lie on your side, prop up on forearm with elbow under shoulder",
+      "Lift hips off the mat — body should form a straight line",
+      "Hold without letting hips sag or pike up"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_sag",
+        "detection": "hips drop below the shoulder-ankle line",
+        "landmarks": [11, 23, 27],
+        "severity": "red"
+      },
+      {
+        "name": "trunk_rotation",
+        "detection": "trunk rotates forward or backward during hold",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_shoulder_injury", "acute_lumbar_disc_herniation"],
+    "regression": "Bend knees, prop from knees instead of feet",
+    "progression": "Add top leg lift, increase hold to 30 seconds"
+  },
+  {
+    "id": "pallof_press_01",
+    "name": "Pallof Press",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 3,
+    "equipment": ["resistance_band", "door_anchor"],
+    "target_muscles": ["obliques", "transversus_abdominis", "rectus_abdominis"],
+    "primary_joint_angle": "elbow_extension_degrees",
+    "target_angles": {
+      "elbow_extension_degrees": 170
+    },
+    "tolerances": {
+      "elbow_extension_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Stand sideways to anchor with band at chest height",
+      "Press band straight out from chest — resist rotation",
+      "Return to chest slowly, fighting the pull the entire time"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_rotation",
+        "detection": "trunk rotates toward the anchor during press",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "red"
+      },
+      {
+        "name": "lateral_lean",
+        "detection": "trunk leans away from anchor instead of staying upright",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Stand closer to anchor, lighter band",
+    "progression": "Heavier band, stand further from anchor"
+  },
+  {
+    "id": "supine_march_01",
+    "name": "Supine Hook-Lying Marches",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["transversus_abdominis", "hip_flexors", "core"],
+    "primary_joint_angle": "hip_flexion_degrees",
+    "target_angles": {
+      "hip_flexion_degrees": 90,
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "hip_flexion_degrees": 10,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "2-1-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lie on back with knees bent, flatten low back into mat",
+      "Lift one knee toward chest while maintaining pelvic tilt",
+      "Lower slowly, then repeat on other side"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_extension",
+        "detection": "low back arches off mat during leg lift",
+        "landmarks": [11, 23],
+        "severity": "red"
+      },
+      {
+        "name": "pelvis_rotation",
+        "detection": "pelvis rocks side to side during marching",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Smaller range of motion, slower tempo",
+    "progression": "Extend leg fully while lowering"
+  },
+  {
+    "id": "glute_bridge_lumbar_01",
+    "name": "Bridge (Lumbar Stabilization)",
+    "body_region": "lumbar",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["gluteus_maximus", "hamstrings", "erector_spinae"],
+    "primary_joint_angle": "hip_extension_degrees",
+    "target_angles": {
+      "hip_extension_degrees": 0
+    },
+    "tolerances": {
+      "hip_extension_degrees": 5
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Lie on back with knees bent, engage core first",
+      "Push through heels to lift hips — stop when body is straight",
+      "Do not arch beyond neutral — think straight line from shoulders to knees"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_hyperextension",
+        "detection": "hips push too high, causing low back arch",
+        "landmarks": [11, 23, 25],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_sacroiliac_dysfunction"],
+    "regression": "Smaller lift, shorter hold",
+    "progression": "Single-leg bridge"
+  },
+  {
+    "id": "plank_forearm_01",
+    "name": "Forearm Plank",
+    "body_region": "lumbar",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["transversus_abdominis", "rectus_abdominis", "obliques", "erector_spinae"],
+    "primary_joint_angle": "trunk_flexion_degrees",
+    "target_angles": {
+      "trunk_flexion_degrees": 0
+    },
+    "tolerances": {
+      "trunk_flexion_degrees": 5
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Prop on forearms and toes, body straight as a board",
+      "Engage core by pulling belly button toward spine",
+      "Don't let your hips sag or pike up"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_sag",
+        "detection": "hips drop below the shoulder-ankle line",
+        "landmarks": [11, 23, 27],
+        "severity": "red"
+      },
+      {
+        "name": "hip_pike",
+        "detection": "hips lift above the shoulder-ankle line",
+        "landmarks": [11, 23, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_shoulder_injury", "acute_wrist_fracture"],
+    "regression": "From knees instead of toes, shorter hold",
+    "progression": "Increase hold to 60 seconds, add arm reach"
+  },
+  {
+    "id": "modified_superman_01",
+    "name": "Modified Superman",
+    "body_region": "lumbar",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["erector_spinae", "multifidus", "gluteus_maximus"],
+    "primary_joint_angle": "lumbar_extension_degrees",
+    "target_angles": {
+      "lumbar_extension_degrees": 10
+    },
+    "tolerances": {
+      "lumbar_extension_degrees": 5
+    },
+    "tempo_seconds": "3-3-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Lie face down with arms extended overhead",
+      "Lift opposite arm and leg 2-3 inches off the mat",
+      "Hold for 3 seconds, then switch sides"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "excessive_extension",
+        "detection": "body lifts too high causing lumbar hyperextension",
+        "landmarks": [11, 23],
+        "severity": "red"
+      },
+      {
+        "name": "neck_hyperextension",
+        "detection": "head lifts excessively looking upward",
+        "landmarks": [0, 11],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["spinal_stenosis_severe", "spondylolisthesis_unstable"],
+    "regression": "Lift only arm or only leg",
+    "progression": "Lift both arms and both legs simultaneously"
+  },
+  {
+    "id": "seated_rotation_01",
+    "name": "Seated Trunk Rotation",
+    "body_region": "lumbar",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["chair"],
+    "target_muscles": ["obliques", "erector_spinae", "multifidus"],
+    "primary_joint_angle": "trunk_rotation_degrees",
+    "target_angles": {
+      "trunk_rotation_degrees": 40
+    },
+    "tolerances": {
+      "trunk_rotation_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 2,
+    "default_reps": 10,
+    "cues": [
+      "Sit tall with feet flat on the floor",
+      "Rotate your trunk to one side, looking over your shoulder",
+      "Keep your pelvis facing forward — only your trunk rotates"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "pelvis_rotation",
+        "detection": "pelvis rotates with trunk instead of staying fixed",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_lumbar_disc_herniation"],
+    "regression": "Reduce rotation range",
+    "progression": "Add gentle overpressure with hands"
+  },
+  {
+    "id": "child_pose_lumbar_01",
+    "name": "Child's Pose",
+    "body_region": "lumbar",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["erector_spinae", "latissimus_dorsi", "quadratus_lumborum"],
+    "primary_joint_angle": "lumbar_flexion_degrees",
+    "target_angles": {
+      "lumbar_flexion_degrees": 40
+    },
+    "tolerances": {
+      "lumbar_flexion_degrees": 15
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Kneel and sit back on your heels",
+      "Reach arms forward and lower your chest toward the floor",
+      "Breathe deeply and relax into the stretch"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "shoulder_impingement",
+        "detection": "shoulders shrug toward ears during reach",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_knee_effusion_severe"],
+    "regression": "Place a pillow between thighs and calves",
+    "progression": "Walk hands to one side for lateral stretch"
+  },
+  {
+    "id": "knee_to_chest_supine_01",
+    "name": "Supine Knee to Chest",
+    "body_region": "lumbar",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["erector_spinae", "gluteus_maximus"],
+    "primary_joint_angle": "hip_flexion_degrees",
+    "target_angles": {
+      "hip_flexion_degrees": 120
+    },
+    "tolerances": {
+      "hip_flexion_degrees": 15
+    },
+    "tempo_seconds": "0-20-0-0",
+    "default_sets": 3,
+    "default_reps": 2,
+    "cues": [
+      "Lie on back and pull one knee toward your chest",
+      "Hold behind the knee, not on the kneecap",
+      "Keep the other leg flat on the mat"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "opposite_leg_lift",
+        "detection": "straight leg lifts off mat during pull",
+        "landmarks": [25, 26, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_lumbar_disc_herniation"],
+    "regression": "Pull gently, shorter hold",
+    "progression": "Pull both knees to chest simultaneously"
+  },
+  {
+    "id": "lumbar_rotation_stretch_01",
+    "name": "Supine Lumbar Rotation Stretch",
+    "body_region": "lumbar",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["mat"],
+    "target_muscles": ["obliques", "erector_spinae", "piriformis"],
+    "primary_joint_angle": "trunk_rotation_degrees",
+    "target_angles": {
+      "trunk_rotation_degrees": 45
+    },
+    "tolerances": {
+      "trunk_rotation_degrees": 10
+    },
+    "tempo_seconds": "0-20-0-0",
+    "default_sets": 3,
+    "default_reps": 2,
+    "cues": [
+      "Lie on back with knees bent together",
+      "Drop both knees to one side while keeping shoulders flat",
+      "Hold for 20 seconds, then switch sides"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "shoulder_lift",
+        "detection": "opposite shoulder lifts off mat during rotation",
+        "landmarks": [11, 12],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_lumbar_disc_herniation", "spondylolisthesis_unstable"],
+    "regression": "Reduce rotation range, add pillow between knees",
+    "progression": "Straighten top leg for greater stretch"
+  },
+
+  {
+    "id": "chin_tuck_01",
+    "name": "Chin Tuck",
+    "body_region": "cervical",
+    "category": "stabilization",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["deep_neck_flexors", "longus_colli", "longus_capitis"],
+    "primary_joint_angle": "cervical_retraction_cm",
+    "target_angles": {
+      "cervical_retraction_cm": 3
+    },
+    "tolerances": {
+      "cervical_retraction_cm": 1
+    },
+    "tempo_seconds": "2-10-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Sit or stand tall, looking straight ahead",
+      "Gently draw your chin straight back, making a double chin",
+      "Hold for 10 seconds — don't tilt your head up or down"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "head_tilt",
+        "detection": "head tilts downward instead of retracting horizontally",
+        "landmarks": [0, 7, 8],
+        "severity": "yellow"
+      },
+      {
+        "name": "jaw_protrusion",
+        "detection": "jaw juts forward instead of head retracting",
+        "landmarks": [0, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_myelopathy_acute"],
+    "regression": "Lying down (supine) chin tuck",
+    "progression": "Add manual overpressure with fingertips on chin"
+  },
+  {
+    "id": "deep_neck_flexor_endurance_01",
+    "name": "Deep Neck Flexor Endurance Hold",
+    "body_region": "cervical",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["deep_neck_flexors", "longus_colli", "longus_capitis"],
+    "primary_joint_angle": "cervical_flexion_degrees",
+    "target_angles": {
+      "cervical_flexion_degrees": 15
+    },
+    "tolerances": {
+      "cervical_flexion_degrees": 5
+    },
+    "tempo_seconds": "0-20-0-0",
+    "default_sets": 3,
+    "default_reps": 3,
+    "cues": [
+      "Lie on your back, tuck chin gently",
+      "Lift head just 1 inch off the mat — barely off",
+      "Hold for 20 seconds without letting chin poke forward"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "superficial_flexor_dominance",
+        "detection": "SCM muscles visibly bulge, head lifts too high",
+        "landmarks": [0, 11],
+        "severity": "red"
+      },
+      {
+        "name": "chin_poke",
+        "detection": "chin extends forward losing the tuck position",
+        "landmarks": [0, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_myelopathy_acute", "cervical_fracture"],
+    "regression": "Shorter hold (10s), head on folded towel",
+    "progression": "Increase hold to 30 seconds"
+  },
+  {
+    "id": "cervical_rotation_rom_01",
+    "name": "Cervical Rotation ROM",
+    "body_region": "cervical",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["sternocleidomastoid", "upper_trapezius", "splenius_capitis"],
+    "primary_joint_angle": "cervical_rotation_degrees",
+    "target_angles": {
+      "cervical_rotation_degrees": 70
+    },
+    "tolerances": {
+      "cervical_rotation_degrees": 15
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 2,
+    "default_reps": 10,
+    "cues": [
+      "Sit tall, slowly turn your head to look over one shoulder",
+      "Go as far as comfortable — no forcing",
+      "Return to center and turn to the other side"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "trunk_rotation",
+        "detection": "shoulders and trunk rotate instead of just the neck",
+        "landmarks": [11, 12],
+        "severity": "yellow"
+      },
+      {
+        "name": "lateral_flexion_substitution",
+        "detection": "head tilts sideways instead of rotating",
+        "landmarks": [0, 7, 8],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["vertebral_artery_insufficiency", "cervical_fracture"],
+    "regression": "Reduce range, move slower",
+    "progression": "Add gentle overpressure at end range"
+  },
+  {
+    "id": "levator_scapulae_stretch_01",
+    "name": "Levator Scapulae Stretch",
+    "body_region": "cervical",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["chair"],
+    "target_muscles": ["levator_scapulae"],
+    "primary_joint_angle": "cervical_lateral_flexion_degrees",
+    "target_angles": {
+      "cervical_lateral_flexion_degrees": 35,
+      "cervical_rotation_degrees": 30
+    },
+    "tolerances": {
+      "cervical_lateral_flexion_degrees": 10,
+      "cervical_rotation_degrees": 10
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Sit tall, rotate head 45 degrees to one side",
+      "Look down toward your armpit on that side",
+      "Use your hand to gently increase the stretch — hold 30 seconds"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "shoulder_elevation",
+        "detection": "opposite shoulder lifts toward ear during stretch",
+        "landmarks": [11, 12, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_radiculopathy_acute"],
+    "regression": "Less pressure, shorter hold",
+    "progression": "Anchor same-side hand under chair for more stretch"
+  },
+  {
+    "id": "upper_trap_stretch_01",
+    "name": "Upper Trapezius Stretch",
+    "body_region": "cervical",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["chair"],
+    "target_muscles": ["upper_trapezius"],
+    "primary_joint_angle": "cervical_lateral_flexion_degrees",
+    "target_angles": {
+      "cervical_lateral_flexion_degrees": 40
+    },
+    "tolerances": {
+      "cervical_lateral_flexion_degrees": 10
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Sit tall, tilt your ear toward your shoulder",
+      "Keep the opposite shoulder down — anchor it by holding the chair seat",
+      "Use your hand to gently increase the stretch"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "shoulder_elevation",
+        "detection": "stretch-side shoulder rises toward ear",
+        "landmarks": [11, 12, 7],
+        "severity": "yellow"
+      },
+      {
+        "name": "trunk_lateral_flexion",
+        "detection": "trunk bends sideways instead of only neck",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_radiculopathy_acute"],
+    "regression": "Gentle tilt only, no hand pressure",
+    "progression": "Add rotation component, longer hold"
+  },
+  {
+    "id": "thoracic_extension_seated_01",
+    "name": "Seated Thoracic Extension",
+    "body_region": "cervical",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": ["chair"],
+    "target_muscles": ["thoracic_erector_spinae", "rhomboids"],
+    "primary_joint_angle": "thoracic_extension_degrees",
+    "target_angles": {
+      "thoracic_extension_degrees": 20
+    },
+    "tolerances": {
+      "thoracic_extension_degrees": 10
+    },
+    "tempo_seconds": "3-3-3-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Sit tall in a chair with hands behind your head",
+      "Gently extend upper back over the chair back",
+      "Keep your low back still — only the upper back moves"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_extension",
+        "detection": "low back extends instead of thoracic spine",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      },
+      {
+        "name": "cervical_hyperextension",
+        "detection": "neck extends excessively during movement",
+        "landmarks": [0, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["thoracic_compression_fracture"],
+    "regression": "Reduce extension range",
+    "progression": "Use foam roller for thoracic extension"
+  },
+  {
+    "id": "scapular_retraction_cervical_01",
+    "name": "Scapular Retraction (Cervical Focus)",
+    "body_region": "cervical",
+    "category": "stabilization",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["rhomboids", "middle_trapezius", "lower_trapezius"],
+    "primary_joint_angle": "shoulder_extension_degrees",
+    "target_angles": {
+      "shoulder_extension_degrees": 15
+    },
+    "tolerances": {
+      "shoulder_extension_degrees": 5
+    },
+    "tempo_seconds": "2-5-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Sit or stand tall with arms at sides",
+      "Squeeze your shoulder blades together and down",
+      "Hold for 5 seconds — think of putting shoulder blades in your back pockets"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "shoulder_elevation",
+        "detection": "shoulders shrug upward during retraction",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      },
+      {
+        "name": "cervical_extension",
+        "detection": "head juts forward during squeeze",
+        "landmarks": [0, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": [],
+    "regression": "Seated with back support",
+    "progression": "Add resistance band for rows"
+  },
+  {
+    "id": "wall_angel_cervical_01",
+    "name": "Wall Angels (Cervical Focus)",
+    "body_region": "cervical",
+    "category": "mobility",
+    "difficulty_tier": 2,
+    "equipment": ["wall"],
+    "target_muscles": ["lower_trapezius", "serratus_anterior", "deep_neck_flexors"],
+    "primary_joint_angle": "shoulder_flexion_degrees",
+    "target_angles": {
+      "shoulder_flexion_degrees": 150,
+      "cervical_retraction_cm": 2
+    },
+    "tolerances": {
+      "shoulder_flexion_degrees": 15,
+      "cervical_retraction_cm": 1
+    },
+    "tempo_seconds": "4-1-4-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Stand with back of head, upper back, and buttocks against wall",
+      "Maintain chin tuck while sliding arms up and down",
+      "Keep wrists and elbows against the wall throughout"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "head_protrusion",
+        "detection": "head loses contact with wall during arm movement",
+        "landmarks": [0, 7],
+        "severity": "yellow"
+      },
+      {
+        "name": "lumbar_extension",
+        "detection": "low back arches away from wall",
+        "landmarks": [23, 11],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["frozen_shoulder_acute", "cervical_myelopathy_acute"],
+    "regression": "Reduce arm elevation range",
+    "progression": "Add light wrist weights"
+  },
+  {
+    "id": "prone_cervical_retraction_01",
+    "name": "Prone Cervical Retraction",
+    "body_region": "cervical",
+    "category": "stabilization",
+    "difficulty_tier": 2,
+    "equipment": ["mat"],
+    "target_muscles": ["deep_neck_flexors", "deep_neck_extensors", "multifidus_cervical"],
+    "primary_joint_angle": "cervical_retraction_cm",
+    "target_angles": {
+      "cervical_retraction_cm": 2
+    },
+    "tolerances": {
+      "cervical_retraction_cm": 1
+    },
+    "tempo_seconds": "2-5-2-0",
+    "default_sets": 3,
+    "default_reps": 8,
+    "cues": [
+      "Lie face down with forehead on a folded towel",
+      "Gently tuck chin and lift head 1 inch off towel",
+      "Hold for 5 seconds — keep your neck long and chin tucked"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "cervical_extension",
+        "detection": "neck extends, head lifts too high looking forward",
+        "landmarks": [0, 11],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["cervical_fracture", "cervical_myelopathy_acute"],
+    "regression": "Perform supine chin tuck instead",
+    "progression": "Increase hold time to 10 seconds"
+  },
+  {
+    "id": "isometric_cervical_multiplanar_01",
+    "name": "Isometric Cervical Multiplanar",
+    "body_region": "cervical",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": [],
+    "target_muscles": ["sternocleidomastoid", "scalenes", "deep_neck_flexors", "upper_trapezius"],
+    "primary_joint_angle": "cervical_neutral_degrees",
+    "target_angles": {
+      "cervical_neutral_degrees": 0
+    },
+    "tolerances": {
+      "cervical_neutral_degrees": 5
+    },
+    "tempo_seconds": "0-6-0-3",
+    "default_sets": 3,
+    "default_reps": 5,
+    "cues": [
+      "Place hand on forehead, push head into hand without moving",
+      "Repeat with hand on each side and on back of head",
+      "Use 50% effort — hold 6 seconds each direction"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "visible_movement",
+        "detection": "head moves against hand instead of isometric hold",
+        "landmarks": [0, 7, 8],
+        "severity": "yellow"
+      },
+      {
+        "name": "shoulder_elevation",
+        "detection": "shoulders shrug upward during isometric",
+        "landmarks": [11, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_fracture", "vertebral_artery_insufficiency"],
+    "regression": "Reduce effort to 25%, shorter holds",
+    "progression": "Increase effort to 75%, longer holds"
+  },
+  {
+    "id": "cervical_flexion_rom_01",
+    "name": "Cervical Flexion ROM",
+    "body_region": "cervical",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["sternocleidomastoid", "scalenes", "deep_neck_flexors"],
+    "primary_joint_angle": "cervical_flexion_degrees",
+    "target_angles": {
+      "cervical_flexion_degrees": 50
+    },
+    "tolerances": {
+      "cervical_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 2,
+    "default_reps": 8,
+    "cues": [
+      "Sit tall, slowly lower your chin toward your chest",
+      "Go as far as comfortable, feeling a gentle stretch in the back of your neck",
+      "Return slowly to neutral"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "thoracic_flexion",
+        "detection": "upper back rounds forward during neck flexion",
+        "landmarks": [11, 12, 23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_myelopathy_acute", "cervical_disc_herniation_acute"],
+    "regression": "Reduce range, move slower",
+    "progression": "Add gentle overpressure with hands"
+  },
+  {
+    "id": "cervical_lateral_flexion_01",
+    "name": "Cervical Lateral Flexion ROM",
+    "body_region": "cervical",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["scalenes", "upper_trapezius", "sternocleidomastoid"],
+    "primary_joint_angle": "cervical_lateral_flexion_degrees",
+    "target_angles": {
+      "cervical_lateral_flexion_degrees": 40
+    },
+    "tolerances": {
+      "cervical_lateral_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 2,
+    "default_reps": 8,
+    "cues": [
+      "Sit tall, tilt your ear toward your shoulder",
+      "Keep your nose pointing forward — don't rotate",
+      "Return to center and repeat on the other side"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "shoulder_elevation",
+        "detection": "shoulder lifts toward the ear instead of ear dropping to shoulder",
+        "landmarks": [11, 12, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["cervical_radiculopathy_acute"],
+    "regression": "Reduce range of motion",
+    "progression": "Add light overpressure"
+  },
+  {
+    "id": "cervical_extension_rom_01",
+    "name": "Cervical Extension ROM",
+    "body_region": "cervical",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["deep_neck_extensors", "splenius_capitis", "semispinalis"],
+    "primary_joint_angle": "cervical_extension_degrees",
+    "target_angles": {
+      "cervical_extension_degrees": 40
+    },
+    "tolerances": {
+      "cervical_extension_degrees": 10
+    },
+    "tempo_seconds": "3-2-3-0",
+    "default_sets": 2,
+    "default_reps": 8,
+    "cues": [
+      "Sit tall, slowly look up toward the ceiling",
+      "Move gently — stop if you feel dizziness",
+      "Return to neutral slowly"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "lumbar_extension",
+        "detection": "low back arches during neck extension",
+        "landmarks": [11, 23],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["vertebral_artery_insufficiency", "cervical_stenosis_severe"],
+    "regression": "Reduce range, use hand for support",
+    "progression": "Increase range gradually"
+  },
+  {
+    "id": "scalene_stretch_01",
+    "name": "Scalene Stretch",
+    "body_region": "cervical",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["chair"],
+    "target_muscles": ["anterior_scalene", "middle_scalene", "posterior_scalene"],
+    "primary_joint_angle": "cervical_lateral_flexion_degrees",
+    "target_angles": {
+      "cervical_lateral_flexion_degrees": 35,
+      "cervical_rotation_degrees": 20
+    },
+    "tolerances": {
+      "cervical_lateral_flexion_degrees": 10,
+      "cervical_rotation_degrees": 10
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Sit tall, grip chair seat with one hand to anchor shoulder",
+      "Tilt head away and slightly rotate toward the stretch side",
+      "Hold for 30 seconds — you should feel a stretch on the side of your neck"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "shoulder_elevation",
+        "detection": "stretch-side shoulder rises during stretch",
+        "landmarks": [11, 12, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["thoracic_outlet_syndrome_acute", "cervical_radiculopathy_acute"],
+    "regression": "Less tilt, shorter hold",
+    "progression": "Increase hold to 45 seconds, add slight extension"
+  },
+  {
+    "id": "neck_retraction_with_extension_01",
+    "name": "Cervical Retraction with Extension",
+    "body_region": "cervical",
+    "category": "mobility",
+    "difficulty_tier": 2,
+    "equipment": [],
+    "target_muscles": ["deep_neck_extensors", "suboccipitals"],
+    "primary_joint_angle": "cervical_extension_degrees",
+    "target_angles": {
+      "cervical_extension_degrees": 25,
+      "cervical_retraction_cm": 3
+    },
+    "tolerances": {
+      "cervical_extension_degrees": 10,
+      "cervical_retraction_cm": 1
+    },
+    "tempo_seconds": "3-3-3-0",
+    "default_sets": 3,
+    "default_reps": 6,
+    "cues": [
+      "First perform a chin tuck (retraction)",
+      "While maintaining the retraction, look up toward the ceiling",
+      "Return to neutral, then repeat"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "loss_of_retraction",
+        "detection": "chin pokes forward as head extends",
+        "landmarks": [0, 7],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["vertebral_artery_insufficiency", "cervical_stenosis_severe"],
+    "regression": "Retraction only, no extension",
+    "progression": "Add manual overpressure at end range"
+  },
+
+  {
+    "id": "ankle_alphabet_01",
+    "name": "Ankle Alphabet",
+    "body_region": "ankle",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["tibialis_anterior", "peroneals", "gastrocnemius"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 20,
+      "ankle_plantarflexion_degrees": 40
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 10,
+      "ankle_plantarflexion_degrees": 10
+    },
+    "tempo_seconds": "1-0-1-0",
+    "default_sets": 2,
+    "default_reps": 1,
+    "cues": [
+      "Sit with leg elevated or hanging off edge of bed",
+      "Trace the alphabet with your big toe — A through Z",
+      "Move only from your ankle, keep your leg still"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_movement",
+        "detection": "knee moves instead of ankle during tracing",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_ankle_fracture"],
+    "regression": "Trace smaller letters, go slower",
+    "progression": "Add resistance band around foot"
+  },
+  {
+    "id": "dorsiflexion_stretch_wall_01",
+    "name": "Wall Dorsiflexion Stretch",
+    "body_region": "ankle",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["wall"],
+    "target_muscles": ["gastrocnemius", "soleus"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 25
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Stand facing wall with toes a few inches from the wall",
+      "Bend knee forward to touch wall, keeping heel on the ground",
+      "If easy, move foot further from wall and repeat"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "heel_lift",
+        "detection": "heel lifts off ground during knee drive",
+        "landmarks": [27, 29, 31],
+        "severity": "red"
+      },
+      {
+        "name": "foot_pronation",
+        "detection": "arch collapses inward during stretch",
+        "landmarks": [27, 29, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture"],
+    "regression": "Move foot closer to wall",
+    "progression": "Move foot further from wall, add knee-to-wall measurement"
+  },
+  {
+    "id": "eccentric_heel_drop_straight_01",
+    "name": "Eccentric Heel Drop (Straight Knee - Alfredson)",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["step_platform"],
+    "target_muscles": ["gastrocnemius", "achilles_tendon"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 20,
+      "knee_extension_degrees": 0
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5,
+      "knee_extension_degrees": 10
+    },
+    "tempo_seconds": "5-0-1-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Stand on the edge of a step on the ball of your affected foot",
+      "Rise up on toes using both feet, then lift the unaffected foot",
+      "Slowly lower the affected heel below step level over 5 seconds"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_bend",
+        "detection": "knee flexes during the heel drop",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      },
+      {
+        "name": "rapid_descent",
+        "detection": "heel drops too quickly, less than 3 seconds",
+        "landmarks": [27, 29, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture", "acute_ankle_fracture"],
+    "regression": "Use both legs, reduce range below step",
+    "progression": "Add backpack weight, increase sets to 6"
+  },
+  {
+    "id": "eccentric_heel_drop_bent_01",
+    "name": "Eccentric Heel Drop (Bent Knee - Alfredson)",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["step_platform"],
+    "target_muscles": ["soleus", "achilles_tendon"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 20,
+      "knee_flexion_degrees": 30
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "5-0-1-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Stand on step edge, bend your knee about 30 degrees",
+      "Rise up on toes with both feet, then lift unaffected foot",
+      "Slowly lower heel below step — keep the knee bent throughout"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_straightening",
+        "detection": "knee extends during the descent",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture", "acute_ankle_fracture"],
+    "regression": "Use both legs, reduce range",
+    "progression": "Add backpack weight"
+  },
+  {
+    "id": "calf_raise_standing_01",
+    "name": "Standing Calf Raise",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["wall"],
+    "target_muscles": ["gastrocnemius", "soleus"],
+    "primary_joint_angle": "ankle_plantarflexion_degrees",
+    "target_angles": {
+      "ankle_plantarflexion_degrees": 35,
+      "knee_extension_degrees": 0
+    },
+    "tolerances": {
+      "ankle_plantarflexion_degrees": 5,
+      "knee_extension_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Stand near wall for balance, feet hip-width apart",
+      "Rise up onto toes as high as possible",
+      "Lower slowly with control — full 3-second descent"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_bend",
+        "detection": "knees flex during the raise",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      },
+      {
+        "name": "ankle_inversion",
+        "detection": "weight shifts to outside of foot during raise",
+        "landmarks": [27, 29, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture"],
+    "regression": "Bilateral with chair support",
+    "progression": "Single leg, add dumbbell"
+  },
+  {
+    "id": "calf_raise_seated_01",
+    "name": "Seated Calf Raise",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["chair"],
+    "target_muscles": ["soleus"],
+    "primary_joint_angle": "ankle_plantarflexion_degrees",
+    "target_angles": {
+      "ankle_plantarflexion_degrees": 30,
+      "knee_flexion_degrees": 90
+    },
+    "tolerances": {
+      "ankle_plantarflexion_degrees": 5,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Sit with feet flat on the floor, knees bent 90 degrees",
+      "Push up onto your toes, lifting your heels off the floor",
+      "Lower slowly — this targets the soleus muscle specifically"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "ankle_inversion",
+        "detection": "feet roll outward during the raise",
+        "landmarks": [27, 29, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture"],
+    "regression": "No added weight",
+    "progression": "Place weight on knees (dumbbell or plate)"
+  },
+  {
+    "id": "single_leg_balance_01",
+    "name": "Single-Leg Balance",
+    "body_region": "ankle",
+    "category": "neuromuscular",
+    "difficulty_tier": 2,
+    "equipment": [],
+    "target_muscles": ["peroneals", "tibialis_posterior", "gastrocnemius", "intrinsic_foot_muscles"],
+    "primary_joint_angle": "ankle_neutral_degrees",
+    "target_angles": {
+      "ankle_neutral_degrees": 0
+    },
+    "tolerances": {
+      "ankle_neutral_degrees": 5
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Stand on one foot near a wall for safety",
+      "Keep your knee slightly soft, not locked",
+      "Focus on a spot on the wall for balance"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "excessive_trunk_sway",
+        "detection": "trunk sways more than 5cm from midline",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      },
+      {
+        "name": "hip_strategy_dominant",
+        "detection": "large hip movements used instead of ankle strategy",
+        "landmarks": [23, 25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_ankle_fracture", "acute_ankle_sprain_grade3"],
+    "regression": "Touch wall with fingertip, hold for 15 seconds",
+    "progression": "Close eyes, stand on foam pad"
+  },
+  {
+    "id": "single_leg_balance_eyes_closed_01",
+    "name": "Single-Leg Balance Eyes Closed",
+    "body_region": "ankle",
+    "category": "neuromuscular",
+    "difficulty_tier": 3,
+    "equipment": [],
+    "target_muscles": ["peroneals", "tibialis_posterior", "gastrocnemius", "intrinsic_foot_muscles"],
+    "primary_joint_angle": "ankle_neutral_degrees",
+    "target_angles": {
+      "ankle_neutral_degrees": 0
+    },
+    "tolerances": {
+      "ankle_neutral_degrees": 5
+    },
+    "tempo_seconds": "0-15-0-0",
+    "default_sets": 3,
+    "default_reps": 3,
+    "cues": [
+      "Stand on one foot near a wall for safety",
+      "Once balanced, close your eyes",
+      "Try to hold for 15 seconds — touch wall if you lose balance"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "excessive_trunk_sway",
+        "detection": "trunk sways more than 5cm from midline",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_ankle_fracture", "acute_ankle_sprain_grade3", "vestibular_disorder_unmanaged"],
+    "regression": "Open eyes, shorten hold time",
+    "progression": "Stand on foam pad with eyes closed"
+  },
+  {
+    "id": "baps_board_01",
+    "name": "BAPS Board (Wobble Board) Balance",
+    "body_region": "ankle",
+    "category": "neuromuscular",
+    "difficulty_tier": 3,
+    "equipment": ["wobble_board"],
+    "target_muscles": ["peroneals", "tibialis_anterior", "tibialis_posterior", "gastrocnemius"],
+    "primary_joint_angle": "ankle_inversion_degrees",
+    "target_angles": {
+      "ankle_inversion_degrees": 15,
+      "ankle_eversion_degrees": 10
+    },
+    "tolerances": {
+      "ankle_inversion_degrees": 5,
+      "ankle_eversion_degrees": 5
+    },
+    "tempo_seconds": "2-0-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Stand on wobble board with both feet",
+      "Slowly rock the board clockwise in a circle",
+      "Try to keep the edges from touching the floor"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "excessive_trunk_movement",
+        "detection": "trunk moves excessively instead of controlling from ankle",
+        "landmarks": [11, 23, 12, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_ankle_fracture", "acute_ankle_sprain_grade3"],
+    "regression": "Hold onto support, seated wobble board",
+    "progression": "Single-leg wobble board, add ball catch"
+  },
+  {
+    "id": "peroneal_strengthening_band_01",
+    "name": "Peroneal Strengthening with Band (Eversion)",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["peroneus_longus", "peroneus_brevis"],
+    "primary_joint_angle": "ankle_eversion_degrees",
+    "target_angles": {
+      "ankle_eversion_degrees": 15
+    },
+    "tolerances": {
+      "ankle_eversion_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Sit with leg extended, band around forefoot anchored to inside",
+      "Push foot outward (eversion) against the band",
+      "Return slowly — control the motion both ways"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_rotation",
+        "detection": "knee rotates outward instead of ankle everting",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_peroneal_tendon_subluxation"],
+    "regression": "Lighter band",
+    "progression": "Heavier band, standing eversion"
+  },
+  {
+    "id": "tibialis_posterior_band_01",
+    "name": "Tibialis Posterior Strengthening (Inversion)",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["tibialis_posterior"],
+    "primary_joint_angle": "ankle_inversion_degrees",
+    "target_angles": {
+      "ankle_inversion_degrees": 15
+    },
+    "tolerances": {
+      "ankle_inversion_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Sit with leg extended, band around forefoot anchored to outside",
+      "Pull foot inward (inversion) against the band",
+      "Return slowly with control"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_rotation",
+        "detection": "knee rotates inward instead of ankle inverting",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_tibialis_posterior_tendon_rupture"],
+    "regression": "Lighter band",
+    "progression": "Heavier band, single-leg heel raises"
+  },
+  {
+    "id": "toe_curls_01",
+    "name": "Toe Curls (Towel Scrunch)",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 1,
+    "equipment": ["towel"],
+    "target_muscles": ["flexor_digitorum_longus", "flexor_hallucis_longus", "intrinsic_foot_muscles"],
+    "primary_joint_angle": "toe_flexion_degrees",
+    "target_angles": {
+      "toe_flexion_degrees": 30
+    },
+    "tolerances": {
+      "toe_flexion_degrees": 10
+    },
+    "tempo_seconds": "2-1-2-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Place a towel flat on the floor, foot on top",
+      "Scrunch the towel toward you by curling your toes",
+      "Spread toes between reps"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "ankle_plantarflexion",
+        "detection": "ankle points downward instead of toes curling",
+        "landmarks": [27, 29, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_metatarsal_fracture"],
+    "regression": "Fewer reps, gentler curl",
+    "progression": "Place a weight on the towel"
+  },
+  {
+    "id": "band_eversion_01",
+    "name": "Resisted Ankle Eversion",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["peroneus_longus", "peroneus_brevis"],
+    "primary_joint_angle": "ankle_eversion_degrees",
+    "target_angles": {
+      "ankle_eversion_degrees": 15
+    },
+    "tolerances": {
+      "ankle_eversion_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Tie band to a fixed object, loop around outside of foot",
+      "Push foot outward against band resistance",
+      "Keep knee still — only your ankle should move"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_abduction_substitution",
+        "detection": "entire leg moves outward instead of ankle",
+        "landmarks": [23, 25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_lateral_ankle_sprain_grade3"],
+    "regression": "Use lighter band",
+    "progression": "Heavier band, add single-leg stance eversion"
+  },
+  {
+    "id": "band_inversion_01",
+    "name": "Resisted Ankle Inversion",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["tibialis_posterior", "tibialis_anterior"],
+    "primary_joint_angle": "ankle_inversion_degrees",
+    "target_angles": {
+      "ankle_inversion_degrees": 15
+    },
+    "tolerances": {
+      "ankle_inversion_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Tie band to a fixed object, loop around inside of foot",
+      "Pull foot inward against band resistance",
+      "Keep knee still — isolate the ankle movement"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "hip_adduction_substitution",
+        "detection": "entire leg moves inward instead of ankle",
+        "landmarks": [23, 25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_medial_ankle_sprain"],
+    "regression": "Use lighter band",
+    "progression": "Heavier band"
+  },
+  {
+    "id": "calf_stretch_wall_01",
+    "name": "Standing Calf Stretch (Gastrocnemius)",
+    "body_region": "ankle",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["wall"],
+    "target_muscles": ["gastrocnemius"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 20
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Step one foot back, keep back knee straight and heel on the ground",
+      "Lean into the wall until you feel a stretch in the back calf",
+      "Hold for 30 seconds"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "heel_lift",
+        "detection": "back heel lifts off floor during stretch",
+        "landmarks": [27, 29, 31],
+        "severity": "red"
+      },
+      {
+        "name": "foot_external_rotation",
+        "detection": "back foot turns outward to cheat the stretch",
+        "landmarks": [27, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture"],
+    "regression": "Shorter stance, less lean",
+    "progression": "Longer stance, deeper lean, elevated forefoot"
+  },
+  {
+    "id": "soleus_stretch_wall_01",
+    "name": "Standing Soleus Stretch (Bent Knee)",
+    "body_region": "ankle",
+    "category": "stretching",
+    "difficulty_tier": 1,
+    "equipment": ["wall"],
+    "target_muscles": ["soleus"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 20,
+      "knee_flexion_degrees": 30
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5,
+      "knee_flexion_degrees": 10
+    },
+    "tempo_seconds": "0-30-0-0",
+    "default_sets": 3,
+    "default_reps": 1,
+    "cues": [
+      "Step one foot back, bend the back knee while keeping heel down",
+      "Lean into the wall — you should feel a deeper, lower calf stretch",
+      "Hold for 30 seconds"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "heel_lift",
+        "detection": "heel lifts off ground during stretch",
+        "landmarks": [27, 29, 31],
+        "severity": "red"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture"],
+    "regression": "Less knee bend, less lean",
+    "progression": "Greater knee bend, longer hold"
+  },
+  {
+    "id": "dorsiflexion_band_01",
+    "name": "Banded Ankle Dorsiflexion Mobilization",
+    "body_region": "ankle",
+    "category": "mobility",
+    "difficulty_tier": 2,
+    "equipment": ["resistance_band"],
+    "target_muscles": ["tibialis_anterior", "ankle_joint_capsule"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 25
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5
+    },
+    "tempo_seconds": "3-3-3-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Loop heavy band low around front of ankle, anchored behind you",
+      "In a half-kneeling position, drive knee forward over toes",
+      "The band pulls the talus backward — improving joint mobility"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "heel_lift",
+        "detection": "heel lifts off the ground during knee drive",
+        "landmarks": [27, 29, 31],
+        "severity": "red"
+      },
+      {
+        "name": "foot_pronation",
+        "detection": "foot arch collapses during mobilization",
+        "landmarks": [27, 29, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_ankle_fracture", "acute_syndesmosis_sprain"],
+    "regression": "Lighter band, less knee drive",
+    "progression": "Heavier band, greater knee forward travel"
+  },
+  {
+    "id": "tibialis_anterior_raise_01",
+    "name": "Tibialis Anterior Raise",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 2,
+    "equipment": ["wall"],
+    "target_muscles": ["tibialis_anterior"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 15
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 15,
+    "cues": [
+      "Lean your back against a wall with feet about a foot away",
+      "Lift your toes and forefeet off the ground toward your shins",
+      "Lower slowly — control the descent"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_bend",
+        "detection": "knees flex to assist the dorsiflexion",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["anterior_compartment_syndrome_acute"],
+    "regression": "Seated dorsiflexion raises",
+    "progression": "Single-leg tibialis raises"
+  },
+  {
+    "id": "single_leg_calf_raise_01",
+    "name": "Single-Leg Calf Raise",
+    "body_region": "ankle",
+    "category": "strengthening",
+    "difficulty_tier": 3,
+    "equipment": ["step_platform", "wall"],
+    "target_muscles": ["gastrocnemius", "soleus"],
+    "primary_joint_angle": "ankle_plantarflexion_degrees",
+    "target_angles": {
+      "ankle_plantarflexion_degrees": 35
+    },
+    "tolerances": {
+      "ankle_plantarflexion_degrees": 5
+    },
+    "tempo_seconds": "3-1-3-0",
+    "default_sets": 3,
+    "default_reps": 12,
+    "cues": [
+      "Stand on one foot on the edge of a step",
+      "Rise up onto your toes as high as possible",
+      "Lower slowly below the step level for full range"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_bend",
+        "detection": "knee flexes during the raise",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      },
+      {
+        "name": "hip_hike",
+        "detection": "pelvis tilts to assist the raise",
+        "landmarks": [23, 24],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_achilles_tendon_rupture", "acute_ankle_fracture"],
+    "regression": "Use wall for balance, bilateral calf raise",
+    "progression": "Hold dumbbell, increase reps to 20"
+  },
+  {
+    "id": "ankle_dorsiflexion_active_01",
+    "name": "Active Ankle Dorsiflexion",
+    "body_region": "ankle",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["tibialis_anterior"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 15
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 5
+    },
+    "tempo_seconds": "2-2-2-0",
+    "default_sets": 3,
+    "default_reps": 10,
+    "cues": [
+      "Sit with leg extended, pull your toes toward your shin",
+      "Hold at end range for 2 seconds",
+      "Relax and repeat — focus on full available range"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "toe_curling",
+        "detection": "toes curl instead of pointing upward",
+        "landmarks": [29, 31],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_ankle_fracture"],
+    "regression": "Assist with towel around foot",
+    "progression": "Add resistance band around forefoot"
+  },
+  {
+    "id": "ankle_circle_01",
+    "name": "Ankle Circles",
+    "body_region": "ankle",
+    "category": "mobility",
+    "difficulty_tier": 1,
+    "equipment": [],
+    "target_muscles": ["tibialis_anterior", "peroneals", "gastrocnemius", "soleus"],
+    "primary_joint_angle": "ankle_dorsiflexion_degrees",
+    "target_angles": {
+      "ankle_dorsiflexion_degrees": 15,
+      "ankle_plantarflexion_degrees": 30
+    },
+    "tolerances": {
+      "ankle_dorsiflexion_degrees": 10,
+      "ankle_plantarflexion_degrees": 10
+    },
+    "tempo_seconds": "2-0-2-0",
+    "default_sets": 2,
+    "default_reps": 10,
+    "cues": [
+      "Sit or lie with foot elevated",
+      "Draw slow, controlled circles with your foot",
+      "Make the circles as large as pain allows, then reverse direction"
+    ],
+    "compensation_patterns": [
+      {
+        "name": "knee_movement",
+        "detection": "knee moves in circles instead of ankle",
+        "landmarks": [25, 27],
+        "severity": "yellow"
+      }
+    ],
+    "contraindications": ["acute_ankle_fracture"],
+    "regression": "Smaller circles",
+    "progression": "Larger circles, add resistance band"
   }
 ]
