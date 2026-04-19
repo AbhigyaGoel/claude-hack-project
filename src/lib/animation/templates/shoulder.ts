@@ -38,27 +38,28 @@ const RIGHT_FOREARM = [16, 18, 20, 22];
 export const overheadReach: MovementTemplate = {
   basePose: "standing",
   activeJoints: [11, 12, 13, 14, 15, 16],
-  description: "Wall slide — arms slide from W to Y position along wall",
+  description: "Wall Slide — W to Y",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    const progress = easeInOutSine(t);
+    const p = easeInOutSine(t);
 
-    // W position start: both arms abducted 90°, elbows bent 90° with forearms pointing up
-    // Y position end: arms abducted ~150° (overhead), elbows straightened
+    // Wall slide: arms go from W position (elbows at sides bent 90°) to Y (overhead)
+    // This is abduction in the coronal plane — arms stay in the plane of the body
 
-    // Left arm: abduct from -90° to -150° (counter-clockwise = up-left)
-    const lShoulderAngle = -90 - progress * 60;
-    rotateJointsAround(pose, 11, LEFT_ARM, lShoulderAngle);
-    // Elbow starts bent 90° (forearm pointing up relative to upper arm), straightens to ~0°
-    // In the W position, forearm points upward; as we go to Y it unbends
-    const lElbowUnbend = progress * 70;
-    rotateJointsAround(pose, 13, LEFT_FOREARM, -lElbowUnbend);
+    // Start position (W): elbows abducted ~80°, bent 90° so forearms point up
+    // End position (Y): arms abducted ~150°, elbows nearly straight
 
-    // Right arm: mirror — abduct from +90° to +150° (clockwise = up-right)
-    const rShoulderAngle = 90 + progress * 60;
-    rotateJointsAround(pose, 12, RIGHT_ARM, rShoulderAngle);
-    const rElbowUnbend = progress * 70;
-    rotateJointsAround(pose, 14, RIGHT_FOREARM, rElbowUnbend);
+    // Left arm: rotate whole chain to abducted position, then animate further up
+    const lAbduct = -80 - p * 70; // -80° to -150°
+    rotateJointsAround(pose, 11, LEFT_ARM, lAbduct);
+    // Unbend elbow as arms go up (bent 90° in W → straight in Y)
+    const elbowBend = (1 - p) * 80; // 80° bent at start → 0° at end
+    rotateJointsAround(pose, 13, LEFT_FOREARM, elbowBend);
+
+    // Right arm: mirror
+    const rAbduct = 80 + p * 70; // 80° to 150°
+    rotateJointsAround(pose, 12, RIGHT_ARM, rAbduct);
+    rotateJointsAround(pose, 14, RIGHT_FOREARM, -elbowBend);
 
     return pose;
   },
