@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import IntakeView from "@/components/IntakeView";
 import RepCounter from "@/components/RepCounter";
@@ -58,6 +59,10 @@ interface NarratorEntry {
 }
 
 export default function SessionPage() {
+  const router = useRouter();
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const narratorAbortRef = useRef<AbortController | null>(null);
+
   const [step, setStep] = useState<SessionStep>("profile");
   const [activeProfile, setActiveProfile] = useState<StoredProfile | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
@@ -124,10 +129,13 @@ export default function SessionPage() {
   // Clinical Narrator — streams reasoning after each rep
   const streamNarrator = useCallback(async (repContext: Record<string, unknown>) => {
     if (!activeProfile) return;
+    narratorAbortRef.current?.abort();
+    narratorAbortRef.current = new AbortController();
     try {
       const res = await fetch("/api/narrator", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: narratorAbortRef.current.signal,
         body: JSON.stringify({
           session_id: `session_${sessionStartRef.current}`,
           patient_id: activeProfile.id,
@@ -497,10 +505,14 @@ export default function SessionPage() {
     <main className="flex-1 flex flex-col p-4 gap-4" style={{ background: "var(--color-background)" }}>
       {/* Header */}
       <header className="flex items-center justify-between px-2">
-        <Link href="/" className="flex items-center gap-2 text-sm font-medium transition-colors duration-200" style={{ color: "var(--color-text-muted)" }}>
+        <button
+          onClick={() => setShowExitConfirm(true)}
+          className="flex items-center gap-2 text-sm font-medium transition-colors duration-200"
+          style={{ color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+        >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Exit
-        </Link>
+        </button>
 
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : step === "halted" ? "#ef4444" : "var(--color-accent)" }} />
@@ -718,6 +730,43 @@ export default function SessionPage() {
             <div className="flex gap-3 justify-center">
               <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
               <Link href="/" className="btn-accent">Return Home</Link>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Exit confirmation modal */}
+      {showExitConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowExitConfirm(false)}
+        >
+          <div
+            className="glass-card p-8 max-w-sm w-full mx-4 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
+              Exit Session?
+            </h2>
+            <p className="text-sm mb-6" style={{ color: "var(--color-text-muted)" }}>
+              Your progress so far will be saved.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="btn-ghost text-sm"
+              >
+                Keep Going
+              </button>
+              <button
+                onClick={() => {
+                  narratorAbortRef.current?.abort();
+                  router.push("/");
+                }}
+                className="btn-accent"
+              >
+                Exit
+              </button>
             </div>
           </div>
         </div>
