@@ -42,12 +42,14 @@ function WebcamLoading() {
   );
 }
 
-type SessionStep = "loading" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
+type SessionStep = "loading" | "returning" | "intake" | "diagnosis" | "plan_review" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
 
 const STEP_LABELS: Record<SessionStep, string> = {
   loading: "Loading",
   returning: "Welcome Back",
   intake: "Diagnostic Intake",
+  diagnosis: "Assessment Results",
+  plan_review: "Exercise Plan",
   pre_pain: "Pre-Session Rating",
   exercising: "Exercise Session",
   rest: "Rest Period",
@@ -115,7 +117,7 @@ export default function SessionPage() {
     const dx = activeProfile.profile.diagnostic;
     setDiagnostic(dx);
     buildPlanFromDiagnostic(dx, activeProfile.session_count + 1);
-    setStep("pre_pain");
+    setStep("plan_review");
   }
 
   function handleNewIntake() {
@@ -165,7 +167,7 @@ export default function SessionPage() {
       setActiveProfile(created);
       buildPlanFromDiagnostic(result, 1);
     }
-    setStep("pre_pain");
+    setStep("diagnosis");
   }
 
   function handlePrePain(value: number) {
@@ -440,6 +442,105 @@ export default function SessionPage() {
               liveRegion={liveIntakeRegion}
               liveResponses={liveIntakeResponses}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Diagnosis Results */}
+      {step === "diagnosis" && diagnostic && (
+        <div className="flex-1 flex items-center justify-center animate-fade-in">
+          <div className="glass-card-bright p-8 max-w-lg w-full">
+            <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+              Assessment Results
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Region</div>
+                <div className="text-sm font-medium capitalize" style={{ color: "var(--color-text-primary)" }}>{diagnostic.body_region}</div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Side</div>
+                <div className="text-sm font-medium capitalize" style={{ color: "var(--color-text-primary)" }}>{diagnostic.side}</div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Severity</div>
+                <div className="text-sm font-mono font-semibold" style={{ color: diagnostic.severity_score > 60 ? "#ef4444" : diagnostic.severity_score > 30 ? "#eab308" : "var(--color-success)" }}>
+                  {diagnostic.severity_score}/100
+                </div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Instrument</div>
+                <div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{diagnostic.instrument_used}</div>
+              </div>
+            </div>
+
+            {diagnostic.functional_deficits.length > 0 && (
+              <div className="mb-4">
+                <div className="data-label mb-2">Functional Deficits</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {diagnostic.functional_deficits.map((d, i) => (
+                    <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
+                      {d.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {diagnostic.red_flags.length > 0 && (
+              <div className="mb-4 p-3 rounded-xl" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                <div className="text-xs font-medium mb-1" style={{ color: "#ef4444" }}>Red Flags Detected</div>
+                {diagnostic.red_flags.map((f, i) => (
+                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mb-4 p-3 rounded-xl" style={{ background: diagnostic.cleared_for_exercise ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${diagnostic.cleared_for_exercise ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}` }}>
+              <div className="w-2 h-2 rounded-full" style={{ background: diagnostic.cleared_for_exercise ? "var(--color-success)" : "#ef4444" }} />
+              <span className="text-sm font-medium" style={{ color: diagnostic.cleared_for_exercise ? "var(--color-success)" : "#ef4444" }}>
+                {diagnostic.cleared_for_exercise ? "Cleared for exercise" : "Not cleared — refer to PT"}
+              </span>
+            </div>
+
+            <button onClick={() => setStep("plan_review")} className="btn-accent w-full">
+              View Exercise Plan
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Review */}
+      {step === "plan_review" && plan && (
+        <div className="flex-1 flex items-center justify-center animate-fade-in overflow-y-auto py-4">
+          <div className="glass-card-bright p-8 max-w-lg w-full">
+            <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+              Your Exercise Plan
+            </h2>
+            <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>
+              Session {plan.session_number} · ~{plan.estimated_duration_minutes} min · {plan.exercises.length} exercises
+            </p>
+
+            <div className="flex flex-col gap-2 mb-6">
+              {plan.exercises.map((ex, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: "var(--color-text-primary)" }}>{ex.name}</div>
+                    <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      {ex.sets} sets × {ex.reps} reps · {ex.tempo_seconds} tempo
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => setStep("pre_pain")} className="btn-accent w-full">
+              Start Session
+            </button>
           </div>
         </div>
       )}
