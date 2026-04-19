@@ -1,14 +1,19 @@
 import { NextRequest } from "next/server";
 import { chat, type ChatMessage } from "@/agents/chatAgent";
 import { getDb } from "@/db";
-import { chatMessages } from "@/db/schema";
-import { getDemoUserId } from "@/lib/supabase";
-import { eq } from "drizzle-orm";
+import { chatMessages, patients } from "@/db/schema";
+import { getCurrentUserId } from "@/lib/auth";
+import { and, eq } from "drizzle-orm";
 
 const MAX_HISTORY_MESSAGES = 20;
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return Response.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { patient_id, message } = body;
 
@@ -20,6 +25,15 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getDb();
+
+    const owned = await db
+      .select({ id: patients.id })
+      .from(patients)
+      .where(and(eq(patients.id, patient_id), eq(patients.user_id, userId)))
+      .limit(1);
+    if (owned.length === 0) {
+      return Response.json({ error: "patient not found" }, { status: 404 });
+    }
 
     const recentMessages = await db
       .select()
@@ -35,7 +49,6 @@ export async function POST(req: NextRequest) {
 
     const assistantResponse = await chat({ patient_id, message, history });
 
-    const userId = getDemoUserId();
     await db.insert(chatMessages).values({
       patient_id,
       user_id: userId,

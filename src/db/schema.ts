@@ -1,6 +1,5 @@
 import {
   pgTable,
-  pgSchema,
   uuid,
   text,
   boolean,
@@ -12,18 +11,20 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Supabase exposes managed users in the `auth.users` table. We declare a
- * minimal pointer to it so our patient-scoped tables can reference user_id
- * without Drizzle trying to manage that table.
+ * App users — simple username/password auth, separate from Supabase Auth.
+ * Security is not a concern for the demo, so the password column holds the
+ * value as the user typed it.
  */
-const authSchema = pgSchema("auth");
-export const authUsers = authSchema.table("users", {
-  id: uuid("id").primaryKey(),
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const patients = pgTable("patients", {
   id: uuid("id").primaryKey().defaultRandom(),
-  user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+  user_id: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull().default("Patient"),
   profile_json: jsonb("profile_json").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -44,7 +45,7 @@ export const sessions = pgTable("sessions", {
   // generated (e.g., the current client-side quick-plan path in /session).
   plan_id: uuid("plan_id").references(() => plans.id, { onDelete: "set null" }),
   patient_id: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
-  user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+  user_id: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
   started_at: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   ended_at: timestamp("ended_at", { withTimezone: true }),
   pain_pre: integer("pain_pre"),
@@ -112,7 +113,7 @@ export const narratorLog = pgTable("narrator_log", {
 export const chatMessages = pgTable("chat_messages", {
   id: uuid("id").primaryKey().defaultRandom(),
   patient_id: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
-  user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+  user_id: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
   role: text("role").notNull(),
   content: text("content").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -127,7 +128,7 @@ export const patientMemory = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     patient_id: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
-    user_id: uuid("user_id").references(() => authUsers.id, { onDelete: "cascade" }),
+    user_id: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
     filename: text("filename").notNull(),
     content: text("content").notNull().default(""),
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

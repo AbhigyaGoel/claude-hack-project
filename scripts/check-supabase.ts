@@ -7,7 +7,7 @@
 
 import { sql } from "drizzle-orm";
 import { getDb, closeDb } from "@/db";
-import { getSupabaseAdmin, getDemoUserId, getDemoPatientId } from "@/lib/supabase";
+import { getDemoUserId, getDemoPatientId } from "@/lib/supabase";
 
 interface TableCount {
   table: string;
@@ -15,6 +15,7 @@ interface TableCount {
 }
 
 const EXPECTED_TABLES = [
+  "users",
   "patients",
   "plans",
   "sessions",
@@ -78,8 +79,11 @@ async function checkRls(): Promise<void> {
   if (withoutRls.length === 0) {
     console.log("✓ RLS enabled on every table");
   } else {
-    console.warn(
-      `⚠ RLS NOT enabled on: ${withoutRls.join(", ")}\n  → Apply supabase/migrations/0002_enable_rls.sql`,
+    // RLS is intentionally off once the simple username/password auth layer
+    // (public.users) replaces Supabase Auth — the app filters by user_id in
+    // its own route handlers instead. Logged for visibility, not a failure.
+    console.log(
+      `ℹ RLS off on ${withoutRls.length} tables (expected with public.users auth — data separation enforced in API routes)`,
     );
   }
 }
@@ -92,16 +96,16 @@ async function checkDemoData(counts: TableCount[]): Promise<void> {
   const demoUserId = getDemoUserId();
   const demoPatientId = getDemoPatientId();
 
-  const admin = getSupabaseAdmin();
-  const { data: user, error: userErr } = await admin.auth.admin.getUserById(demoUserId);
+  const db = getDb();
+  const userLookup = await db.execute<{ username: string }>(
+    sql.raw(`select username from public.users where id = '${demoUserId}'`),
+  );
 
-  if (userErr) {
-    console.warn(`⚠ auth.users lookup failed: ${userErr.message}`);
-  } else if (!user?.user) {
-    console.warn(`⚠ Demo user ${demoUserId} not found in auth.users`);
+  if (userLookup.length === 0) {
+    console.warn(`⚠ Demo user ${demoUserId} not found in public.users`);
     console.warn("  → Run `npm run db:seed` to create it");
   } else {
-    console.log(`✓ Demo user present: ${user.user.email} (${demoUserId})`);
+    console.log(`✓ Demo user present: @${userLookup[0].username} (${demoUserId})`);
   }
 
   if (patientRows === 0) {
@@ -109,7 +113,6 @@ async function checkDemoData(counts: TableCount[]): Promise<void> {
     return;
   }
 
-  const db = getDb();
   const rows = await db.execute<{ id: string; name: string }>(
     sql.raw(`select id, name from public.patients where id = '${demoPatientId}'`),
   );

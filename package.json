@@ -9,7 +9,7 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
+    "db:push": "dotenv -e .env.local -- drizzle-kit push",
     "db:seed": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-demo.ts",
     "db:migrate-memory": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/migrate-memory-files.ts",
     "db:check": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/check-supabase.ts"
@@ -38,6 +38,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",

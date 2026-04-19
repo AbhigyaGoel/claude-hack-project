@@ -1,18 +1,18 @@
 /**
- * Seed demo fixtures — one demo user, one returning patient with 3 prior
+ * Seed demo fixtures — one demo user with a returning patient, 3 prior
  * sessions, and a pre-populated patient_memory namespace so Claude can
  * reference specific notes in the "returning patient" demo beat.
  *
- * Usage: `npm run db:seed` (requires DATABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
- * NEXT_PUBLIC_SUPABASE_URL, and the two DEMO_*_ID envs).
+ * Usage: `npm run db:seed` (requires DATABASE_URL plus the two DEMO_*_ID
+ * envs). Idempotent: safe to re-run.
  *
- * Idempotent: safe to re-run. Delete the demo user in Supabase to reset.
+ * Credentials: username `demo`, password `demo`.
  */
 
 import { randomUUID } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
 import { getDb, closeDb } from "@/db";
 import {
+  users,
   patients,
   plans,
   sessions,
@@ -25,37 +25,34 @@ const DEMO_USER_ID =
   process.env.DEMO_USER_ID ?? "00000000-0000-0000-0000-000000000001";
 const DEMO_PATIENT_ID =
   process.env.DEMO_PATIENT_ID ?? "11111111-1111-1111-1111-111111111111";
-const DEMO_EMAIL = process.env.DEMO_EMAIL ?? "demo@vero.local";
+const DEMO_USERNAME = process.env.DEMO_USERNAME ?? "demo";
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "demo";
 
-async function ensureDemoUser(): Promise<void> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
-    );
+async function seedUser(): Promise<void> {
+  const db = getDb();
+
+  const existing = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, DEMO_USER_ID))
+    .limit(1);
+
+  if (existing.length === 0) {
+    await db
+      .insert(users)
+      .values({
+        id: DEMO_USER_ID,
+        username: DEMO_USERNAME,
+        password: DEMO_PASSWORD,
+      })
+      .onConflictDoUpdate({
+        target: users.username,
+        set: { id: DEMO_USER_ID, password: DEMO_PASSWORD },
+      });
+    console.log(`users: seeded ${DEMO_USERNAME} / ${DEMO_PASSWORD} (${DEMO_USER_ID})`);
+  } else {
+    console.log(`users: ${DEMO_USERNAME} already exists (${DEMO_USER_ID})`);
   }
-
-  const admin = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data: existing } = await admin.auth.admin.getUserById(DEMO_USER_ID);
-  if (existing?.user) {
-    console.log(`auth.users: demo user ${DEMO_USER_ID} already exists`);
-    return;
-  }
-
-  // Supabase admin API lets us provide the id explicitly so .env references
-  // stay stable across seeds.
-  const { error } = await admin.auth.admin.createUser({
-    id: DEMO_USER_ID,
-    email: DEMO_EMAIL,
-    email_confirm: true,
-    user_metadata: { seeded: true, note: "Vero demo user" },
-  });
-  if (error) throw error;
-  console.log(`auth.users: created ${DEMO_EMAIL} (${DEMO_USER_ID})`);
 }
 
 async function seedPatient(): Promise<void> {
@@ -92,7 +89,12 @@ async function seedPatient(): Promise<void> {
     });
     console.log(`patients: seeded Riley Chen (${DEMO_PATIENT_ID})`);
   } else {
-    console.log(`patients: ${DEMO_PATIENT_ID} already exists`);
+    // Re-link to the current demo user in case the FK was nulled by migration.
+    await db
+      .update(patients)
+      .set({ user_id: DEMO_USER_ID })
+      .where(eq(patients.id, DEMO_PATIENT_ID));
+    console.log(`patients: ${DEMO_PATIENT_ID} already exists — re-linked to demo user`);
   }
 }
 
@@ -129,8 +131,6 @@ async function seedPlanAndSessions(): Promise<void> {
     console.log(`plans: reusing existing plan ${planId}`);
   }
 
-  // Three prior sessions, pain trending down and form quality up — the
-  // numbers matter for the progress dashboard demo beat.
   const priorSessions = [
     {
       started: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
@@ -293,7 +293,6 @@ async function seedPatientMemory(): Promise<void> {
     },
   ];
 
-  // Replace the demo patient's memory wholesale — seed is authoritative.
   await db
     .delete(patientMemory)
     .where(eq(patientMemory.patient_id, DEMO_PATIENT_ID));
@@ -311,11 +310,13 @@ async function seedPatientMemory(): Promise<void> {
 
 async function main() {
   try {
-    await ensureDemoUser();
+    await seedUser();
     await seedPatient();
     await seedPlanAndSessions();
     await seedPatientMemory();
-    console.log("\nDemo seed complete.");
+    console.log(
+      `\nDemo seed complete. Sign in with username "${DEMO_USERNAME}" / password "${DEMO_PASSWORD}".`,
+    );
   } finally {
     await closeDb();
   }

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { sessions, sets, repAnalyses } from "@/db/schema";
-import { getDemoUserId } from "@/lib/supabase";
+import { getCurrentUserId } from "@/lib/auth";
+
+function unauthorized() {
+  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
 
 /**
  * GET /api/sessions?patient_id=UUID
@@ -11,8 +15,10 @@ import { getDemoUserId } from "@/lib/supabase";
  * page can render without further roundtrips.
  */
 export async function GET(req: NextRequest) {
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const db = getDb();
-  const userId = getDemoUserId();
   const url = new URL(req.url);
   const patientId = url.searchParams.get("patient_id");
 
@@ -105,8 +111,10 @@ interface PostPayload {
 }
 
 export async function POST(req: NextRequest) {
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const db = getDb();
-  const userId = getDemoUserId();
   const body = (await req.json()) as PostPayload;
 
   if (!body.patient_id || !Array.isArray(body.exercises)) {

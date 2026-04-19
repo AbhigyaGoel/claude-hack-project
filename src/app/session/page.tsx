@@ -9,7 +9,6 @@ import RepCounter from "@/components/RepCounter";
 import VoiceCoach from "@/components/VoiceCoach";
 import PainScale from "@/components/PainScale";
 import ExerciseGuide from "@/components/ExerciseGuide";
-import ProfileSelector from "@/components/ProfileSelector";
 import type { DiagnosticResult } from "@/types/patient";
 import type { ExercisePlan, ExercisePlanItem } from "@/types/exercise";
 import type { RepQuality } from "@/types/assessment";
@@ -23,7 +22,12 @@ import {
   createPatient,
   listSessions,
   saveSession,
+  getCurrentUser,
 } from "@/lib/api";
+
+function titleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
 
 const WebcamView = lazy(() => import("@/components/WebcamView"));
 
@@ -38,10 +42,10 @@ function WebcamLoading() {
   );
 }
 
-type SessionStep = "profile" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary" | "halted";
+type SessionStep = "loading" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary" | "halted";
 
 const STEP_LABELS: Record<SessionStep, string> = {
-  profile: "Select Profile",
+  loading: "Loading",
   returning: "Welcome Back",
   intake: "Diagnostic Intake",
   pre_pain: "Pre-Session Rating",
@@ -67,7 +71,7 @@ export default function SessionPage() {
   const [liveIntakeRegion, setLiveIntakeRegion] = useState<import("@/types/exercise").BodyRegion | null>(null);
   const [liveIntakeResponses, setLiveIntakeResponses] = useState<Record<string, string>>({});
   const narratorAbortRef = useRef<AbortController | null>(null);
-  const [step, setStep] = useState<SessionStep>("profile");
+  const [step, setStep] = useState<SessionStep>("loading");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
@@ -228,28 +232,28 @@ export default function SessionPage() {
     }
   }, [currentExercise]);
 
-  // Check for existing active patient on mount
+  // Check for existing active patient on mount. New accounts have zero
+  // patients — drop them straight into intake instead of a redundant
+  // "create a profile" screen (the account IS the profile).
   useEffect(() => {
+    let cancelled = false;
     getActivePatient()
       .then((profile) => {
-        if (profile && profile.profile?.diagnostic?.cleared_for_exercise) {
+        if (cancelled) return;
+        if (profile) {
           setActiveProfile(profile);
-          setStep("returning");
+          setStep(profile.profile?.diagnostic?.cleared_for_exercise ? "returning" : "intake");
+        } else {
+          setStep("intake");
         }
       })
       .catch(() => {
-        // No active profile — selector UI stays visible
+        if (!cancelled) setStep("intake");
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  function handleProfileSelect(profile: PatientRecord) {
-    setActiveProfile(profile);
-    if (profile.profile?.diagnostic?.cleared_for_exercise) {
-      setStep("returning");
-    } else {
-      setStep("intake");
-    }
-  }
 
   function handleContinueAsReturning() {
     if (!activeProfile?.profile?.diagnostic) return;
@@ -299,7 +303,11 @@ export default function SessionPage() {
     if (activeProfile) {
       buildPlanFromDiagnostic(result, activeProfile.session_count + 1);
     } else {
-      const created = await createPatient("Patient", result);
+      // New account flow — name the patient after the signed-in user so
+      // the UI shows "@alice" instead of a generic "Patient".
+      const me = await getCurrentUser().catch(() => null);
+      const patientName = me?.username ? titleCase(me.username) : "Patient";
+      const created = await createPatient(patientName, result);
       setActivePatientId(created.id);
       setActiveProfile(created);
       buildPlanFromDiagnostic(result, 1);
@@ -551,10 +559,10 @@ export default function SessionPage() {
         </div>
       </header>
 
-      {/* Profile Selection */}
-      {step === "profile" && (
-        <div className="flex-1 flex items-center justify-center animate-fade-in">
-          <ProfileSelector onSelect={handleProfileSelect} onCreateNew={handleNewIntake} />
+      {/* Loading — while we figure out if the user has an existing patient */}
+      {step === "loading" && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="spinner" />
         </div>
       )}
 

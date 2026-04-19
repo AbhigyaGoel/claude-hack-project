@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { conductIntake } from "@/agents/diagnosticInterviewer";
 import { getDb } from "@/db";
 import { patients } from "@/db/schema";
-import { getDemoUserId } from "@/lib/supabase";
+import { getCurrentUserId } from "@/lib/auth";
 import type { BodyRegion } from "@/types/exercise";
 import type { Side } from "@/types/patient";
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { bodyRegion, responses, patientName } = body as {
       bodyRegion: BodyRegion;
@@ -29,7 +34,7 @@ export async function POST(req: NextRequest) {
     const [row] = await db
       .insert(patients)
       .values({
-        user_id: getDemoUserId(),
+        user_id: userId,
         name: patientName || "Patient",
         profile_json: {
           name: patientName || "Patient",

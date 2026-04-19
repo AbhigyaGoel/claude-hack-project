@@ -26,18 +26,34 @@ const LEFT_ARM = [13, 15, 17, 19, 21];
 const RIGHT_ARM = [14, 16, 18, 20, 22];
 
 /**
- * Overhead reach: arms raise from sides to overhead (shoulder flexion).
- * Used for: wall_slide, supine_flexion, prone_y_raise, wall_angel
+ * Wall slide: back against wall, elbows bent at 90°, slide arms up the wall.
+ * Start: elbows at shoulder height, bent 90° (W position)
+ * End: arms extended overhead along wall (Y position)
+ * The key is arms stay in the coronal plane (against wall), not forward.
  */
 export const overheadReach: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [11, 12, 13, 14],
-  description: "Arms raise overhead (shoulder flexion)",
+  activeJoints: [11, 12, 13, 14, 15, 16],
+  description: "Wall slide — arms slide up along wall",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    const angle = easeInOutSine(t) * -150; // negative = upward in screen coords
-    rotateJointsAround(pose, 11, LEFT_ARM, angle);
-    rotateJointsAround(pose, 12, RIGHT_ARM, angle);
+    const progress = easeInOutSine(t);
+
+    // Start position: elbows out at shoulder height, bent 90° (W shape)
+    // End position: arms fully extended overhead (Y shape)
+
+    // Left arm
+    const lShoulderAngle = -90 - progress * 60; // -90° (horizontal) to -150° (overhead)
+    rotateJointsAround(pose, 11, LEFT_ARM, lShoulderAngle);
+    // Elbow straightens as arms go up: 90° bent → nearly straight
+    const elbowAngle = progress * 60; // unbend the elbow
+    rotateJointsAround(pose, 13, [15, 17, 19, 21], -elbowAngle);
+
+    // Right arm (mirror)
+    const rShoulderAngle = 90 + progress * 60;
+    rotateJointsAround(pose, 12, RIGHT_ARM, rShoulderAngle);
+    rotateJointsAround(pose, 14, [16, 18, 20, 22], elbowAngle);
+
     return pose;
   },
 };
@@ -52,10 +68,10 @@ export const lateralRaise: MovementTemplate = {
   description: "Arms raise sideways (shoulder abduction)",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    const angle = easeInOutSine(t) * -80;
-    // Left arm goes counter-clockwise (up-left), right goes clockwise (up-right)
-    rotateJointsAround(pose, 11, LEFT_ARM, angle);
-    rotateJointsAround(pose, 12, RIGHT_ARM, -angle);
+    const angle = easeInOutSine(t) * 80;
+    // Left arm rotates counter-clockwise (up-left), right arm clockwise (up-right)
+    rotateJointsAround(pose, 11, LEFT_ARM, -angle);
+    rotateJointsAround(pose, 12, RIGHT_ARM, angle);
     return pose;
   },
 };
@@ -168,6 +184,59 @@ export const shrug: MovementTemplate = {
       pose[idx] = { ...pose[idx], y: pose[idx].y + lift };
     }
     for (const idx of [12, 14, 16, 18, 20, 22]) {
+      pose[idx] = { ...pose[idx], y: pose[idx].y + lift };
+    }
+    return pose;
+  },
+};
+
+/**
+ * Supine arm raise: lying on back, one arm lifts overhead.
+ * Used for: shoulder_flexion_supine, sleeper_stretch
+ */
+export const supineArmRaise: MovementTemplate = {
+  basePose: "supine",
+  activeJoints: [11, 13, 15],
+  description: "Lying on back, arm raises overhead",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("supine"));
+    // Left arm rotates from resting at side to overhead
+    const angle = easeInOutSine(t) * -130;
+    rotateJointsAround(pose, 11, LEFT_ARM, angle);
+    return pose;
+  },
+};
+
+/**
+ * Sidelying external rotation: lying on side, forearm rotates up.
+ * Used for: external_rotation_sidelying
+ */
+export const sidelyingER: MovementTemplate = {
+  basePose: "sidelying",
+  activeJoints: [14, 16],
+  description: "Lying on side, forearm rotates upward",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("sidelying"));
+    // Upper arm at side, elbow bent 90, forearm rotates
+    const angle = easeInOutSine(t) * -60;
+    rotateJointsAround(pose, 14, [16, 18, 20, 22], angle);
+    return pose;
+  },
+};
+
+/**
+ * Prone arm raise: face down, arms lift in Y/T pattern.
+ * Used for: prone_y_raise, prone_t_raise, prone_w_raise
+ */
+export const proneArmRaise: MovementTemplate = {
+  basePose: "prone",
+  activeJoints: [11, 12, 13, 14],
+  description: "Lying face down, arms lift upward",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("prone"));
+    const lift = easeInOutSine(t) * -0.08;
+    // Both arms lift
+    for (const idx of [...LEFT_ARM, ...RIGHT_ARM]) {
       pose[idx] = { ...pose[idx], y: pose[idx].y + lift };
     }
     return pose;
