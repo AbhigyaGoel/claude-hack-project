@@ -11,6 +11,8 @@ interface IntakeViewProps {
   liveRegion?: BodyRegion | null;
   /** Pre-filled responses from voice conversation — user clicks override */
   liveResponses?: Record<string, string>;
+  /** Suppress TTS narration — set when ConversationalIntake is already speaking */
+  disableTTS?: boolean;
 }
 
 interface Question {
@@ -92,7 +94,7 @@ function SpeakingIndicator() {
   );
 }
 
-export default function IntakeView({ onComplete, liveRegion, liveResponses }: IntakeViewProps) {
+export default function IntakeView({ onComplete, liveRegion, liveResponses, disableTTS = false }: IntakeViewProps) {
   const [step, setStep] = useState<IntakeStep>("region");
   const [bodyRegion, setBodyRegion] = useState<BodyRegion | null>(null);
   const [responses, setResponses] = useState<Record<string, string>>({});
@@ -141,6 +143,7 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
 
   // Speak welcome message on mount
   useEffect(() => {
+    if (disableTTS) return;
     if (!welcomeSpokenRef.current) {
       welcomeSpokenRef.current = true;
       speak(WELCOME_MESSAGE);
@@ -154,6 +157,7 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
 
   // Speak step-transition narration when step changes
   useEffect(() => {
+    if (disableTTS) return;
     if (lastSpokenStepRef.current === step) return;
     lastSpokenStepRef.current = step;
 

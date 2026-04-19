@@ -855,6 +855,7 @@ export default function SessionPage() {
               onComplete={handleIntakeComplete}
               liveRegion={liveIntakeRegion}
               liveResponses={liveIntakeResponses}
+              disableTTS={useVoiceIntake}
             />
           </div>
         </div>
