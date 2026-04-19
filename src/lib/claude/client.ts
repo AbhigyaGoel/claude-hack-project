@@ -126,18 +126,21 @@ export async function callClaude(opts: {
 
 /**
  * Simple Claude call without tools.
+ * Supports prompt caching via systemParts.
  */
 export async function callClaudeSimple(opts: {
   model?: ModelId;
   system: string;
+  systemParts?: string[];
   prompt: string;
   maxTokens?: number;
 }): Promise<string> {
-  const { model = "claude-sonnet-4-6-20250514", system, prompt, maxTokens = 4096 } = opts;
+  const { model = "claude-sonnet-4-6-20250514", system, systemParts, prompt, maxTokens = 4096 } = opts;
+  const systemParam = systemParts ? buildCachedSystem(systemParts) : system;
   const response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
-    system,
+    system: systemParam,
     messages: [{ role: "user", content: prompt }],
   });
   const textBlocks = response.content.filter(

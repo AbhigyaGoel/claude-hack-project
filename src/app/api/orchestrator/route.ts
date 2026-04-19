@@ -7,6 +7,8 @@ import {
   CUE_GENERATOR_SYSTEM,
 } from "@/lib/claude/prompts";
 import { loadPatientContext } from "@/lib/claude/memory";
+import { queryExercises } from "@/lib/exercises";
+import { getTools } from "@/lib/claude/tools";
 import { getDb } from "@/db";
 import { sessions, sets, repAnalyses, redFlags, narratorLog } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -183,14 +185,37 @@ async function handleEvaluateRep(
   const encoder = new TextEncoder();
   const sessionStartMs = Date.now();
 
-  // Build cached system parts for the session context
+  // Build cached system parts for prompt caching
   const patientContext = patient_id ? loadPatientContext(patient_id) : "";
+  const exerciseLibrary = queryExercises({ body_region: undefined });
+  const exerciseLibraryJson = JSON.stringify(
+    exerciseLibrary.map((ex) => ({
+      id: ex.id,
+      name: ex.name,
+      body_region: ex.body_region,
+      category: ex.category,
+      target_angles: ex.target_angles,
+      compensation_patterns: ex.compensation_patterns.map((cp) => cp.name),
+    })),
+  );
+  const toolDefs = getTools(
+    "log_rep", "progress_exercise", "regress_exercise", "flag_red_flag",
+  );
+  const toolDefsJson = JSON.stringify(toolDefs);
   const sessionContext = JSON.stringify({
     session_id: sessionId,
     exercise_name: exercise.name,
     rep_number,
     set_number,
   });
+
+  // Cached system parts — the last part gets cache_control: ephemeral via buildCachedSystem()
+  const formCriticSystemParts = [
+    FORM_CRITIC_SYSTEM,
+    `\n\nExercise Library:\n${exerciseLibraryJson}`,
+    `\n\nPatient Profile:\n${patientContext}`,
+    `\n\nTool Definitions:\n${toolDefsJson}`,
+  ];
 
   const formCriticPrompt = JSON.stringify({
     exercise_name: exercise.name,
@@ -218,7 +243,7 @@ async function handleEvaluateRep(
 
         // Spawn form-critic and safety-monitor in parallel
         const [formResult, safetyResult] = await Promise.all([
-          runFormCritic(formCriticPrompt, frame_base64),
+          runFormCritic(formCriticPrompt, frame_base64, formCriticSystemParts),
           runSafetyMonitor(safetyPrompt, frame_base64),
         ]);
 
@@ -288,6 +313,7 @@ async function handleEvaluateRep(
         if (patient_id) {
           const narratorSystemParts = [
             NARRATOR_SYSTEM,
+            `\n\nExercise Library:\n${exerciseLibraryJson}`,
             `\n\n## Patient Context\n${patientContext}`,
             `\n\n## Session Context\n${sessionContext}`,
           ];
@@ -365,7 +391,7 @@ async function handleEvaluateRep(
 
 // --- Agent runners ---
 
-async function runFormCritic(prompt: string, frameBase64?: string) {
+async function runFormCritic(prompt: string, frameBase64?: string, systemParts?: string[]) {
   const defaultResult = {
     faults: [],
     quality: 0.5,
@@ -376,17 +402,20 @@ async function runFormCritic(prompt: string, frameBase64?: string) {
   try {
     let raw: string;
     if (frameBase64) {
+      // Vision calls don't support systemParts yet — use plain system
       raw = await callClaudeVision({
         model: "claude-sonnet-4-6-20250514",
-        system: FORM_CRITIC_SYSTEM,
+        system: systemParts ? systemParts.join("") : FORM_CRITIC_SYSTEM,
         imageBase64: frameBase64,
         prompt: `Analyze this rep with visual + keypoint data:\n${prompt}\n\nOutput RepAnalysis JSON.`,
         maxTokens: 2048,
       });
     } else {
+      // Use streaming-compatible callClaudeSimple with cached system
       raw = await callClaudeSimple({
         model: "claude-sonnet-4-6-20250514",
         system: FORM_CRITIC_SYSTEM,
+        systemParts,
         prompt: `Analyze this rep:\n${prompt}\n\nOutput RepAnalysis JSON.`,
         maxTokens: 2048,
       });

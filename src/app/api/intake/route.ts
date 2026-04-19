@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callClaude } from "@/lib/claude/client";
 import { INTAKE_SYSTEM } from "@/lib/claude/prompts";
+import { spawnDifferentialResolver } from "@/lib/claude/sub-agents";
 import { getDb } from "@/db";
 import { patients } from "@/db/schema";
 
@@ -166,6 +167,39 @@ export async function POST(req: NextRequest) {
     // Fall back to deterministic analysis
   }
 
+  // Spawn differential resolver sub-agent when severity is ambiguous (30-60)
+  let differentialTest: {
+    recommended_test: string;
+    test_description: string;
+    clinical_rationale: string;
+  } | null = null;
+
+  if (severityPct >= 30 && severityPct <= 60) {
+    try {
+      const parsed = JSON.parse(claudeAnalysis);
+      const differential = parsed.differential ?? [];
+      if (differential.length >= 2) {
+        const topTwo = differential.slice(0, 2) as [
+          { diagnosis: string; icd10?: string; confidence: number; supporting_findings?: string[] },
+          { diagnosis: string; icd10?: string; confidence: number; supporting_findings?: string[] },
+        ];
+        const result = await spawnDifferentialResolver(topTwo, {
+          body_region: bodyRegion,
+          severity_score: severityPct,
+          responses,
+          red_flags: detectedRedFlags,
+        });
+        differentialTest = {
+          recommended_test: result.recommended_test,
+          test_description: result.test_description,
+          clinical_rationale: result.clinical_rationale,
+        };
+      }
+    } catch {
+      // Non-critical — proceed without differential resolver
+    }
+  }
+
   // Build diagnostic result
   let functionalDeficits: string[] = [];
   let contraindications: string[] = [];
@@ -217,5 +251,6 @@ export async function POST(req: NextRequest) {
     diagnostic: diagnosticResult,
     instrument: instrument.name,
     questions: instrument.questions,
+    ...(differentialTest ? { differential_test: differentialTest } : {}),
   });
 }
