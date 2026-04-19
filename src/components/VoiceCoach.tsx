@@ -57,7 +57,7 @@ export default function VoiceCoach({
   const prevVisionFaultsRef = useRef<string[]>([]);
   /** Timestamp of last mid-set cue — enforces minimum gap between interruptions */
   const lastMidCueTimeRef = useRef(0);
-  const MID_CUE_COOLDOWN_MS = 7_500;
+  const MID_CUE_COOLDOWN_MS = 5_000;
 
   // Talk mode refs
   const conversationRef = useRef<Conversation | null>(null);
@@ -69,7 +69,7 @@ export default function VoiceCoach({
   const modeRef = useRef(mode);
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
-  // ── Startup greeting when exercise begins ────────────────────────────────
+  // ── Startup greeting on first mount ──────────────────────────────────────
   useEffect(() => {
     const handle = speakNonBlocking(
       `Alright — ${exerciseName}. ${totalReps} reps, ${totalSets} set${totalSets > 1 ? "s" : ""}. Start when you're ready.`,
@@ -80,6 +80,27 @@ export default function VoiceCoach({
     return () => handle.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // fires once on mount
+
+  // ── Exercise transition greeting (fires when exercise changes, not on first mount) ──
+  const prevExerciseRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevExerciseRef.current === null) {
+      prevExerciseRef.current = exerciseName;
+      return;
+    }
+    if (prevExerciseRef.current === exerciseName) return;
+    prevExerciseRef.current = exerciseName;
+
+    currentPlaybackRef.current?.stop();
+    const handle = speakNonBlocking(
+      `Next up — ${exerciseName}. ${totalReps} rep${totalReps > 1 ? "s" : ""}, ${totalSets} set${totalSets > 1 ? "s" : ""}. Start when ready.`,
+      setIsSpeaking,
+      EMOTION_TTS.encouraging,
+    );
+    currentPlaybackRef.current = handle;
+    return () => handle.stop();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseName]);
 
   // ── Coaching: call /api/cue then play TTS ──────────────────────────────────
   /**

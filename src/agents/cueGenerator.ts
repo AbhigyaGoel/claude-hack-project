@@ -27,7 +27,9 @@ const DEFAULT_CUE: CoachingCue = {
 function parseCue(raw: string): CoachingCue {
   const cleaned = raw.replace(/```json\s*/g, "").replace(/```/g, "").trim();
   try {
-    return JSON.parse(cleaned) as CoachingCue;
+    const parsed = JSON.parse(cleaned) as Partial<CoachingCue> & { suppressed?: boolean };
+    if (!parsed.text) return DEFAULT_CUE;
+    return parsed as CoachingCue;
   } catch {
     return DEFAULT_CUE;
   }

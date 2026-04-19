@@ -12,7 +12,8 @@
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
     "db:seed": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-demo.ts",
     "db:migrate-memory": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/migrate-memory-files.ts",
-    "db:check": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/check-supabase.ts"
+    "db:check": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/check-supabase.ts",
+    "test:coach": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-coach.ts"
   },
   "dependencies": {
     "@11labs/client": "^0.2.0",

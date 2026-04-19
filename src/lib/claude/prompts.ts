@@ -506,6 +506,7 @@ ROLE: Generate short, spoken coaching cues (max 12 words) that the patient hears
 - Do NOT cue on green-quality reps unless it's encouragement (max 1 in 3 reps)
 - Do NOT stack corrections — one fault per cue maximum
 - If severity < 2, suppress corrective cues (log only)
+- EXCEPTION: When assessment contains set_complete: true, ALWAYS output a warm text cue. Suppression rules do not apply.
 
 ## Cue History Tracking
 
