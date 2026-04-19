@@ -20,150 +20,220 @@ function rotateJointsAround(
   }
 }
 
-// Left arm chain indices from shoulder
+// Left arm chain indices from shoulder (elbow, wrist, hand landmarks)
 const LEFT_ARM = [13, 15, 17, 19, 21];
 // Right arm chain indices from shoulder
 const RIGHT_ARM = [14, 16, 18, 20, 22];
+// Left forearm + hand from elbow
+const LEFT_FOREARM = [15, 17, 19, 21];
+// Right forearm + hand from elbow
+const RIGHT_FOREARM = [16, 18, 20, 22];
 
 /**
- * Overhead reach: arms raise from sides to overhead (shoulder flexion).
- * Used for: wall_slide, supine_flexion, prone_y_raise, wall_angel
+ * Wall slide: back against wall, arms in W position sliding to Y position.
+ * Start: elbows at shoulder height, bent 90° (W shape) — arms abducted in coronal plane.
+ * End: arms extended overhead along wall (Y shape).
+ * Arms stay in the coronal plane (abduction), not sagittal flexion.
  */
 export const overheadReach: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [11, 12, 13, 14],
-  description: "Arms raise overhead (shoulder flexion)",
+  activeJoints: [23, 24, 25, 26],
+  description: "Wall Slide",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    const angle = easeInOutSine(t) * -150; // negative = upward in screen coords
-    rotateJointsAround(pose, 11, LEFT_ARM, angle);
+    const p = easeInOutSine(t);
+
+    // Wall slide (shoulder mobility): back against wall, arms slide up the wall.
+    // W position (start): elbows out at shoulder height, forearms up — goal post shape
+    // Y position (end): arms extended overhead — Y shape
+    // Body stays still. This is a SHOULDER exercise.
+    //
+    // Using explicit keyframe interpolation — no rotation math.
+
+    // Left arm: W → Y
+    pose[13] = { x: 0.28 + p * 0.04, y: 0.25 - p * 0.13, z: 0, visibility: 1 };  // elbow
+    pose[15] = { x: 0.28 + p * 0.07, y: 0.12 - p * 0.11, z: 0, visibility: 1 };  // wrist
+
+    // Right arm: W → Y (mirror)
+    pose[14] = { x: 0.72 - p * 0.04, y: 0.25 - p * 0.13, z: 0, visibility: 1 };  // elbow
+    pose[16] = { x: 0.72 - p * 0.07, y: 0.12 - p * 0.11, z: 0, visibility: 1 };  // wrist
+
+    // Hands follow wrists
+    for (const i of [17, 19, 21]) pose[i] = { ...pose[15], visibility: 0.3 };
+    for (const i of [18, 20, 22]) pose[i] = { ...pose[16], visibility: 0.3 };
+
+    return pose;
+  },
+};
+
+/**
+ * Lateral raise: both arms raise from sides to shoulder height (90° abduction).
+ * Arms stay straight throughout. Coronal plane abduction.
+ */
+export const lateralRaise: MovementTemplate = {
+  basePose: "standing",
+  activeJoints: [11, 12, 13, 14, 15, 16],
+  description: "Both arms raise sideways to shoulder height (lateral raise)",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("standing"));
+    const angle = easeInOutSine(t) * 90;
+    // Left arm: negative angle = counter-clockwise = raises up-left
+    rotateJointsAround(pose, 11, LEFT_ARM, -angle);
+    // Right arm: positive angle = clockwise = raises up-right
     rotateJointsAround(pose, 12, RIGHT_ARM, angle);
     return pose;
   },
 };
 
 /**
- * Lateral raise: arms raise to the side (shoulder abduction).
- * Used for: shoulder_abduction, prone_t_raise
- */
-export const lateralRaise: MovementTemplate = {
-  basePose: "standing",
-  activeJoints: [11, 12, 13, 14, 15, 16],
-  description: "Arms raise sideways (shoulder abduction)",
-  animate: (_basePose, t) => {
-    const pose = clonePose(getBasePose("standing"));
-    const angle = easeInOutSine(t) * -80;
-    // Left arm goes counter-clockwise (up-left), right goes clockwise (up-right)
-    rotateJointsAround(pose, 11, LEFT_ARM, angle);
-    rotateJointsAround(pose, 12, RIGHT_ARM, -angle);
-    return pose;
-  },
-};
-
-/**
- * External rotation: elbow at 90 degrees, forearm rotates outward.
- * Used for: ER exercises (sidelying, standing band, 90-degree)
+ * External rotation: standing, right elbow pinned to side at 90° bend.
+ * Forearm rotates outward (away from belly).
+ * Only the forearm moves — upper arm stays at side.
  */
 export const externalRotation: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [12, 14, 16],
-  description: "Forearm rotates outward (external rotation)",
+  activeJoints: [14, 16],
+  description: "Forearm rotates outward with elbow at side (external rotation)",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    // Set right elbow at 90 degrees bent at side
+
+    // Right elbow pinned at side, at the level of the waist
+    // Elbow at right shoulder x, midway between shoulder and hip y
     pose[14] = { x: 0.59, y: 0.38, z: 0, visibility: 1 };
-    pose[16] = { x: 0.59, y: 0.38, z: 0, visibility: 1 };
-    // Position forearm horizontally (elbow bent 90)
-    pose[16] = { x: 0.68, y: 0.38, z: 0, visibility: 1 };
-    // Rotate forearm around elbow
+    // Forearm starts pointing forward/across belly (medial), pointing toward center
+    pose[16] = { x: 0.50, y: 0.38, z: 0, visibility: 1 };
+    // Hand landmarks follow wrist
+    pose[18] = { x: 0.49, y: 0.40, z: 0, visibility: 0.3 };
+    pose[20] = { x: 0.50, y: 0.40, z: 0, visibility: 0.3 };
+    pose[22] = { x: 0.51, y: 0.40, z: 0, visibility: 0.3 };
+
+    // Rotate forearm outward (away from belly) around elbow
+    // From belly-pointing to outward = counter-clockwise in screen coords = negative angle
+    // ~45° of external rotation
     const angle = easeInOutSine(t) * -45;
-    rotateJointsAround(pose, 14, [16, 18, 20, 22], angle);
+    rotateJointsAround(pose, 14, RIGHT_FOREARM, angle);
     return pose;
   },
 };
 
 /**
- * Internal rotation: elbow at 90 degrees, forearm rotates inward.
- * Used for: IR exercises
+ * Internal rotation: standing, right elbow pinned to side at 90° bend.
+ * Forearm rotates inward (toward belly).
+ * Only the forearm moves — upper arm stays at side.
  */
 export const internalRotation: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [12, 14, 16],
-  description: "Forearm rotates inward (internal rotation)",
+  activeJoints: [14, 16],
+  description: "Forearm rotates inward with elbow at side (internal rotation)",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    // Elbow at side, forearm pointing forward
+
+    // Right elbow pinned at side
     pose[14] = { x: 0.59, y: 0.38, z: 0, visibility: 1 };
+    // Forearm starts pointing forward (neutral, perpendicular to body)
     pose[16] = { x: 0.68, y: 0.38, z: 0, visibility: 1 };
-    // Rotate forearm inward (positive = clockwise = inward)
+    pose[18] = { x: 0.69, y: 0.40, z: 0, visibility: 0.3 };
+    pose[20] = { x: 0.68, y: 0.40, z: 0, visibility: 0.3 };
+    pose[22] = { x: 0.67, y: 0.40, z: 0, visibility: 0.3 };
+
+    // Rotate forearm inward (toward belly) = clockwise in screen coords = positive angle
+    // ~45° of internal rotation
     const angle = easeInOutSine(t) * 45;
-    rotateJointsAround(pose, 14, [16, 18, 20, 22], angle);
+    rotateJointsAround(pose, 14, RIGHT_FOREARM, angle);
     return pose;
   },
 };
 
 /**
- * Scapular squeeze: arms pull back slightly, squeezing shoulder blades.
- * Used for: scapular_retraction
+ * Scapular squeeze: standing, shoulder blades squeeze together.
+ * Very subtle movement — shoulders pull back ~2-3cm, chest puffs forward slightly.
+ * Arms stay mostly at sides, elbows may bend slightly back.
  */
 export const scapularSqueeze: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [11, 12, 13, 14],
-  description: "Arms pull back, squeezing shoulder blades",
+  activeJoints: [11, 12],
+  description: "Shoulder blades squeeze together (scapular retraction)",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
     const t2 = easeInOutSine(t);
-    // Elbows pull back and shoulders pinch together
-    const dx = t2 * 0.03;
+
+    // Shoulders pull back (widen laterally by ~0.02-0.03)
+    const dx = t2 * 0.025;
     pose[11] = { ...pose[11], x: pose[11].x - dx };
     pose[12] = { ...pose[12], x: pose[12].x + dx };
-    pose[13] = { ...pose[13], x: pose[13].x - dx * 1.5 };
-    pose[14] = { ...pose[14], x: pose[14].x + dx * 1.5 };
-    // Bend elbows slightly back
-    const angle = t2 * -15;
-    rotateJointsAround(pose, 13, [15, 17, 19, 21], angle);
-    rotateJointsAround(pose, 14, [16, 18, 20, 22], -angle);
+
+    // Elbows and wrists follow shoulders back
+    pose[13] = { ...pose[13], x: pose[13].x - dx * 1.2 };
+    pose[14] = { ...pose[14], x: pose[14].x + dx * 1.2 };
+    pose[15] = { ...pose[15], x: pose[15].x - dx };
+    pose[16] = { ...pose[16], x: pose[16].x + dx };
+
+    // Chest puffs forward very subtly (in front view, this is barely visible)
+    // Nose/head stays still — only shoulder girdle moves
     return pose;
   },
 };
 
 /**
- * Pendulum: bent over, arm swings gently.
- * Used for: pendulum exercise
+ * Pendulum: patient bends forward at waist ~45-60°, supporting with one hand on table.
+ * Other arm hangs straight down and swings gently in small circles.
+ * Side view using standingSide pose.
  */
 export const pendulum: MovementTemplate = {
   basePose: "standingSide",
   activeJoints: [12, 14, 16],
-  description: "Bent over, arm swings like a pendulum",
+  description: "Bent over, dangling arm swings like a pendulum",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standingSide"));
-    // Bend torso forward: shift upper body forward and down
-    const bend = 0.12;
-    pose[0] = { ...pose[0], x: pose[0].x + 0.10, y: pose[0].y + bend };
-    pose[11] = { ...pose[11], x: pose[11].x + 0.05, y: pose[11].y + bend * 0.8 };
-    pose[12] = { ...pose[12], x: pose[12].x + 0.05, y: pose[12].y + bend * 0.8 };
-    // Right arm hangs down and swings
-    pose[14] = { ...pose[14], x: 0.55, y: 0.55, z: 0, visibility: 1 };
-    pose[16] = { ...pose[16], x: 0.55, y: 0.68, z: 0, visibility: 1 };
-    // Swing the hanging arm
-    const swingAngle = Math.sin(easeInOutSine(t) * Math.PI * 2) * 25;
-    rotateJointsAround(pose, 12, [14, 16, 18, 20, 22], swingAngle);
+
+    // Bend torso forward ~50° around hips
+    const hipMidX = (pose[23].x + pose[24].x) / 2;
+    const hipMidY = (pose[23].y + pose[24].y) / 2;
+    const upperBody = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+    for (const idx of upperBody) {
+      const rotated = rotatePoint(pose[idx].x, pose[idx].y, hipMidX, hipMidY, 50);
+      pose[idx] = { ...pose[idx], x: rotated.x, y: rotated.y };
+    }
+
+    // Left arm supports on table (fixed position)
+    pose[13] = { ...pose[13], x: pose[13].x - 0.02, y: pose[13].y + 0.05 };
+    pose[15] = { ...pose[15], x: pose[15].x - 0.05, y: pose[15].y + 0.10 };
+
+    // Right arm hangs straight down from shoulder
+    const rShoulder = pose[12];
+    pose[14] = { ...pose[14], x: rShoulder.x, y: rShoulder.y + 0.12 };
+    pose[16] = { ...pose[16], x: rShoulder.x, y: rShoulder.y + 0.24 };
+    pose[18] = { ...pose[18], x: rShoulder.x + 0.01, y: rShoulder.y + 0.26 };
+    pose[20] = { ...pose[20], x: rShoulder.x, y: rShoulder.y + 0.26 };
+    pose[22] = { ...pose[22], x: rShoulder.x - 0.01, y: rShoulder.y + 0.26 };
+
+    // Swing the hanging arm in a gentle circle
+    const swingAngle = easeInOutSine(t) * Math.PI * 2;
+    const radius = 0.03;
+    const swingDx = Math.cos(swingAngle) * radius;
+    const swingDy = Math.sin(swingAngle) * radius;
+    for (const idx of [14, 16, 18, 20, 22]) {
+      pose[idx] = { ...pose[idx], x: pose[idx].x + swingDx, y: pose[idx].y + swingDy };
+    }
+
     return pose;
   },
 };
 
 /**
- * Shrug: shoulders elevate upward.
- * Used for: shoulder_shrug
+ * Shrug: shoulders elevate straight up toward ears, then drop back down.
+ * Arms stay at sides. Only shoulder girdle moves vertically.
  */
 export const shrug: MovementTemplate = {
   basePose: "standing",
   activeJoints: [11, 12],
-  description: "Shoulders elevate upward (shrug)",
+  description: "Shoulders elevate toward ears (shrug)",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
+    // Lift amount: negative y = upward in screen coords
     const lift = easeInOutSine(t) * -0.04;
-    // Lift shoulders, elbows, and wrists
+
+    // Lift shoulders and entire arm chains
     for (const idx of [11, 13, 15, 17, 19, 21]) {
       pose[idx] = { ...pose[idx], y: pose[idx].y + lift };
     }
@@ -175,70 +245,148 @@ export const shrug: MovementTemplate = {
 };
 
 /**
- * Supine arm raise: lying on back, one arm lifts overhead.
- * Used for: shoulder_flexion_supine, sleeper_stretch
- */
-export const supineArmRaise: MovementTemplate = {
-  basePose: "supine",
-  activeJoints: [11, 13, 15],
-  description: "Lying on back, arm raises overhead",
-  animate: (_basePose, t) => {
-    const pose = clonePose(getBasePose("supine"));
-    // Left arm rotates from resting at side to overhead
-    const angle = easeInOutSine(t) * -130;
-    rotateJointsAround(pose, 11, LEFT_ARM, angle);
-    return pose;
-  },
-};
-
-/**
- * Sidelying external rotation: lying on side, forearm rotates up.
- * Used for: external_rotation_sidelying
- */
-export const sidelyingER: MovementTemplate = {
-  basePose: "sidelying",
-  activeJoints: [14, 16],
-  description: "Lying on side, forearm rotates upward",
-  animate: (_basePose, t) => {
-    const pose = clonePose(getBasePose("sidelying"));
-    // Upper arm at side, elbow bent 90, forearm rotates
-    const angle = easeInOutSine(t) * -60;
-    rotateJointsAround(pose, 14, [16, 18, 20, 22], angle);
-    return pose;
-  },
-};
-
-/**
- * Prone arm raise: face down, arms lift in Y/T pattern.
- * Used for: prone_y_raise, prone_t_raise, prone_w_raise
- */
-export const proneArmRaise: MovementTemplate = {
-  basePose: "prone",
-  activeJoints: [11, 12, 13, 14],
-  description: "Lying face down, arms lift upward",
-  animate: (_basePose, t) => {
-    const pose = clonePose(getBasePose("prone"));
-    const lift = easeInOutSine(t) * -0.08;
-    // Both arms lift
-    for (const idx of [...LEFT_ARM, ...RIGHT_ARM]) {
-      pose[idx] = { ...pose[idx], y: pose[idx].y + lift };
-    }
-    return pose;
-  },
-};
-
-/**
- * Cross-body stretch: arm reaches across the chest.
- * Used for: cross_body_stretch
+ * Cross-body stretch: right arm reaches straight across the chest
+ * toward the left shoulder. The arm stays at about shoulder height.
  */
 export const crossBody: MovementTemplate = {
   basePose: "standing",
   activeJoints: [12, 14, 16],
-  description: "Arm reaches across the chest",
+  description: "Arm reaches across chest toward opposite shoulder",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    const angle = easeInOutSine(t) * 90; // clockwise moves right arm across
-    rotateJointsAround(pose, 12, RIGHT_ARM, angle);
+    const t2 = easeInOutSine(t);
+
+    // Right arm lifts to shoulder height and sweeps across
+    // First, raise right arm to horizontal (~90° abduction)
+    // Then swing it across the body (adduction past midline)
+    // Combined motion: arm goes from hanging at side to across chest
+
+    // Position right arm at shoulder height, extended across body
+    const crossAmount = t2;
+    // Right elbow moves from hanging position to shoulder height and across
+    pose[14] = {
+      ...pose[14],
+      x: 0.62 - crossAmount * 0.20, // moves from right toward center/left
+      y: 0.38 - crossAmount * 0.13, // rises to shoulder height (0.25)
+    };
+    pose[16] = {
+      ...pose[16],
+      x: 0.64 - crossAmount * 0.30, // wrist crosses past midline
+      y: 0.50 - crossAmount * 0.25, // rises to shoulder height
+    };
+    pose[18] = {
+      ...pose[18],
+      x: 0.65 - crossAmount * 0.32,
+      y: 0.52 - crossAmount * 0.26,
+    };
+    pose[20] = {
+      ...pose[20],
+      x: 0.64 - crossAmount * 0.30,
+      y: 0.53 - crossAmount * 0.27,
+    };
+    pose[22] = {
+      ...pose[22],
+      x: 0.63 - crossAmount * 0.28,
+      y: 0.52 - crossAmount * 0.26,
+    };
+
+    return pose;
+  },
+};
+
+/**
+ * Supine arm raise: lying on back, one arm raises from alongside body to overhead.
+ * Arm stays straight (elbow locked). Movement in the sagittal plane.
+ * In supine side view: arm rotates from along the body to overhead (toward head).
+ */
+export const supineArmRaise: MovementTemplate = {
+  basePose: "supine",
+  activeJoints: [11, 13, 15],
+  description: "Lying on back, arm raises overhead keeping elbow straight",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("supine"));
+
+    // Straighten left arm first (it starts slightly bent in supine base)
+    // In supine view, arm is along the body pointing toward feet
+    // Arm should rotate from alongside body (pointing right/feet) to overhead (pointing left/head)
+    // That's a counter-clockwise rotation around the shoulder
+
+    // Straighten left arm along the body first
+    pose[13] = { x: 0.30, y: 0.62, z: 0, visibility: 1 };
+    pose[15] = { x: 0.35, y: 0.62, z: 0, visibility: 1 };
+    pose[17] = { x: 0.36, y: 0.61, z: 0, visibility: 0.3 };
+    pose[19] = { x: 0.36, y: 0.62, z: 0, visibility: 0.3 };
+    pose[21] = { x: 0.36, y: 0.63, z: 0, visibility: 0.3 };
+
+    // Rotate entire arm around left shoulder (index 11) overhead
+    // In supine side view, overhead = toward head (left) = counter-clockwise = negative angle
+    // Full range: ~150° from alongside body to overhead
+    const angle = easeInOutSine(t) * -150;
+    rotateJointsAround(pose, 11, [13, 15, 17, 19, 21], angle);
+
+    return pose;
+  },
+};
+
+/**
+ * Sidelying external rotation: lying on side, bottom arm under head.
+ * Top arm: elbow bent 90° and pinned to side. Forearm rotates upward (ER).
+ * Only the forearm moves — upper arm stays at side.
+ */
+export const sidelyingER: MovementTemplate = {
+  basePose: "sidelying",
+  activeJoints: [14, 16],
+  description: "Lying on side, top forearm rotates upward (external rotation)",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("sidelying"));
+
+    // Top arm (right side, indices 12/14/16) — elbow bent 90°, pinned to side
+    // In sidelying view: upper arm along the torso, forearm hanging down
+    // Elbow at right hip level, forearm pointing downward
+    pose[14] = { x: 0.38, y: 0.55, z: 0, visibility: 1 };
+    // Forearm starts pointing downward (toward ground)
+    pose[16] = { x: 0.38, y: 0.65, z: 0, visibility: 1 };
+    pose[18] = { x: 0.37, y: 0.66, z: 0, visibility: 0.3 };
+    pose[20] = { x: 0.38, y: 0.66, z: 0, visibility: 0.3 };
+    pose[22] = { x: 0.39, y: 0.66, z: 0, visibility: 0.3 };
+
+    // External rotation: forearm rotates upward (away from ground)
+    // In sidelying view, upward rotation around elbow = counter-clockwise = negative angle
+    // ~90° of rotation (from pointing down to pointing up)
+    const angle = easeInOutSine(t) * -90;
+    rotateJointsAround(pose, 14, RIGHT_FOREARM, angle);
+
+    return pose;
+  },
+};
+
+/**
+ * Prone arm raise: lying face down, both arms lift off the surface slightly (~15-20°).
+ * Head stays down. Arms are extended.
+ */
+export const proneArmRaise: MovementTemplate = {
+  basePose: "prone",
+  activeJoints: [11, 12, 13, 14, 15, 16],
+  description: "Lying face down, both arms lift slightly off the surface",
+  animate: (_basePose, t) => {
+    const pose = clonePose(getBasePose("prone"));
+    const lift = easeInOutSine(t) * 0.06;
+
+    // Both arms lift upward (decrease y in screen coords)
+    // Left arm (top side in prone)
+    for (const idx of [13, 15, 17, 19, 21]) {
+      pose[idx] = { ...pose[idx], y: pose[idx].y - lift };
+    }
+    // Right arm (bottom side in prone)
+    for (const idx of [14, 16, 18, 20, 22]) {
+      pose[idx] = { ...pose[idx], y: pose[idx].y - lift };
+    }
+
+    // Shoulders lift slightly too
+    pose[11] = { ...pose[11], y: pose[11].y - lift * 0.5 };
+    pose[12] = { ...pose[12], y: pose[12].y - lift * 0.5 };
+
+    // Head stays down (no change to landmark 0)
     return pose;
   },
 };

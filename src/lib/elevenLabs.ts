@@ -27,8 +27,10 @@ export async function textToSpeech(
   });
 
   if (!response.ok) {
-    const detail = await response.json().catch(() => ({}));
-    throw new Error(`TTS failed: ${response.status} ${detail?.error ?? ""}`);
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `ElevenLabs TTS failed: ${response.status} ${response.statusText}${body ? ` — ${body}` : ""}`,
+    );
   }
 
   return response.arrayBuffer();

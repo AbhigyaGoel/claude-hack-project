@@ -160,7 +160,7 @@ async function generateExercisesForRegion(
   console.log(`Generating exercises for ${region}...`);
 
   const response = await client.messages.create({
-    model: "claude-opus-4-7-20250219",
+    model: "claude-opus-4-7",
     max_tokens: 16000,
     thinking: {
       type: "enabled",

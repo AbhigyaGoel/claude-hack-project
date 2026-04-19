@@ -1,4 +1,4 @@
-import { callClaudeWithTools, type ClaudeTool } from "../lib/claude";
+import { callClaude, type ToolDef as ClaudeTool } from "../lib/claude/client";
 import type { BodyRegion } from "../types/exercise";
 import type { DiagnosticResult, Side } from "../types/patient";
 
@@ -632,12 +632,12 @@ export async function conductIntake(
 
   const userMessage = buildUserMessage(bodyRegion, responses);
 
-  const { toolResults } = await callClaudeWithTools(
-    SYSTEM_PROMPT,
-    [{ role: "user", content: userMessage }],
-    TOOLS,
+  const { toolResults } = await callClaude({
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userMessage }],
+    tools: TOOLS,
     toolHandlers,
-  );
+  });
 
   // The final tool result should be the FunctionalClassification
   const classification = findClassificationResult(toolResults);
@@ -648,17 +648,6 @@ export async function conductIntake(
 
   // Fallback: run the pipeline directly without Claude if tool results
   // didn't produce a classification (defensive path)
-  return runDirectPipeline(bodyRegion, responses);
-}
-
-/**
- * Runs the screening pipeline directly without Claude orchestration.
- * Useful for testing or as a fallback.
- */
-export async function conductIntakeDirect(
-  bodyRegion: BodyRegion,
-  responses: IntakeResponses,
-): Promise<DiagnosticResult> {
   return runDirectPipeline(bodyRegion, responses);
 }
 

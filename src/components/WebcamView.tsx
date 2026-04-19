@@ -94,8 +94,8 @@ export default function WebcamView({
               drawAngleLabel(ctx, landmarks[12], angles.right_shoulder_flexion, canvas.width, canvas.height);
             }
             // Show knee angles only if legs are bent
-            if (angles.left_knee_flexion < 160) {
-              drawAngleLabel(ctx, landmarks[25], 180 - angles.left_knee_flexion, canvas.width, canvas.height);
+            if (angles.left_knee_flexion > 15) {
+              drawAngleLabel(ctx, landmarks[25], angles.left_knee_flexion, canvas.width, canvas.height);
             }
           }
         } else {

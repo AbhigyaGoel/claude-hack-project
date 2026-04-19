@@ -4,7 +4,6 @@ import { pingPong } from "./easing";
 import { getBasePose } from "./basePoses";
 import { drawSkeleton } from "@/lib/skeletonRenderer";
 import {
-  drawBackground,
   drawJointGlow,
   drawLabel,
 } from "./annotations";
@@ -14,10 +13,6 @@ const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
 /**
  * React hook that drives the exercise animation loop.
- *
- * Renders at ~30fps using requestAnimationFrame. Calculates a normalized
- * time value t, applies pingPong for rep cycling, then calls the template's
- * animate() function and renders using drawSkeleton().
  */
 export function useAnimationLoop(
   canvasRef: RefObject<HTMLCanvasElement | null>,
@@ -45,7 +40,6 @@ export function useAnimationLoop(
     function render(now: number): void {
       rafRef.current = requestAnimationFrame(render);
 
-      // Throttle to target FPS
       const delta = now - lastFrameRef.current;
       if (delta < FRAME_INTERVAL) return;
       lastFrameRef.current = now - (delta % FRAME_INTERVAL);
@@ -55,8 +49,9 @@ export function useAnimationLoop(
       const context = canvasEl.getContext("2d");
       if (!context) return;
 
-      const w = canvasEl.width;
-      const h = canvasEl.height;
+      // Use CSS dimensions (not pixel dimensions) since setTransform(dpr) is active
+      const w = parseInt(canvasEl.style.width) || canvasEl.clientWidth || 320;
+      const h = parseInt(canvasEl.style.height) || canvasEl.clientHeight || 220;
 
       // Calculate normalized time for rep cycle
       const elapsed = now - startTimeRef.current;
@@ -67,30 +62,21 @@ export function useAnimationLoop(
       const basePose = getBasePose(template.basePose);
       const animatedPose = template.animate(basePose, t);
 
-      // Draw background
-      drawBackground(context, w, h);
-
-      // Draw skeleton using existing renderer
+      // drawSkeleton calls clearRect — that's our background clear
+      // The dark background comes from the container div CSS
       drawSkeleton(context, animatedPose, w, h);
 
       // Draw joint glows on active joints
       const pulseT = (elapsed % 1000) / 1000;
       for (const jointIdx of template.activeJoints) {
         if (jointIdx < animatedPose.length) {
-          drawJointGlow(
-            context,
-            animatedPose[jointIdx],
-            w,
-            h,
-            "#22c55e",
-            pulseT,
-          );
+          drawJointGlow(context, animatedPose[jointIdx], w, h, "#22c55e", pulseT);
         }
       }
 
       // Draw exercise label
       if (exerciseName) {
-        drawLabel(context, exerciseName, w / 2, h * 0.04);
+        drawLabel(context, exerciseName, w / 2, 10);
       }
     }
 

@@ -156,7 +156,7 @@ export async function spawnDifferentialResolver(
     });
 
     const raw = await callClaudeSimple({
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-sonnet-4-6",
       system: DIFFERENTIAL_RESOLVER_PROMPT,
       prompt: `Resolve this differential:\n${prompt}\n\nOutput JSON only.`,
       maxTokens: 1024,
@@ -198,7 +198,7 @@ export async function spawnProgressionEvaluator(
     });
 
     const raw = await callClaudeSimple({
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-sonnet-4-6",
       system: PROGRESSION_EVALUATOR_PROMPT,
       prompt: `Evaluate progression:\n${prompt}\n\nOutput JSON only.`,
       maxTokens: 2048,

@@ -3,8 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 const anthropic = new Anthropic();
 
 export type ModelId =
-  | "claude-opus-4-7-20250219"
-  | "claude-sonnet-4-6-20250514"
+  | "claude-opus-4-7"
+  | "claude-sonnet-4-6"
   | "claude-haiku-4-5-20251001";
 
 export interface ToolDef {
@@ -45,7 +45,7 @@ export async function callClaude(opts: {
   thinking?: { type: "enabled"; budget_tokens: number };
 }): Promise<ToolCallResult> {
   const {
-    model = "claude-sonnet-4-6-20250514",
+    model = "claude-sonnet-4-6",
     system,
     systemParts,
     messages,
@@ -135,7 +135,7 @@ export async function callClaudeSimple(opts: {
   prompt: string;
   maxTokens?: number;
 }): Promise<string> {
-  const { model = "claude-sonnet-4-6-20250514", system, systemParts, prompt, maxTokens = 4096 } = opts;
+  const { model = "claude-sonnet-4-6", system, systemParts, prompt, maxTokens = 4096 } = opts;
   const systemParam = systemParts ? buildCachedSystem(systemParts) : system;
   const response = await anthropic.messages.create({
     model,
@@ -161,7 +161,7 @@ export async function callClaudeVision(opts: {
   maxTokens?: number;
 }): Promise<string> {
   const {
-    model = "claude-sonnet-4-6-20250514",
+    model = "claude-sonnet-4-6",
     system,
     imageBase64,
     mediaType = "image/jpeg",
@@ -203,7 +203,7 @@ export async function* streamClaude(opts: {
   thinking?: { type: "enabled"; budget_tokens: number };
 }): AsyncGenerator<{ type: "text" | "thinking"; content: string }> {
   const {
-    model = "claude-opus-4-7-20250219",
+    model = "claude-opus-4-7",
     system,
     systemParts,
     messages,

@@ -42,27 +42,22 @@ function WebcamLoading() {
   );
 }
 
-type SessionStep = "loading" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary" | "halted";
+type SessionStep = "loading" | "returning" | "intake" | "diagnosis" | "plan_review" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
 
 const STEP_LABELS: Record<SessionStep, string> = {
   loading: "Loading",
   returning: "Welcome Back",
   intake: "Diagnostic Intake",
+  diagnosis: "Assessment Results",
+  plan_review: "Exercise Plan",
   pre_pain: "Pre-Session Rating",
   exercising: "Exercise Session",
   rest: "Rest Period",
   post_pain: "Post-Session Rating",
   summary: "Session Complete",
-  halted: "Session Halted",
 };
 
 type MovementPhase = "ready" | "lifting" | "holding" | "lowering";
-
-interface NarratorEntry {
-  id: string;
-  text: string;
-  timestamp: number;
-}
 
 export default function SessionPage() {
   const router = useRouter();
@@ -70,7 +65,6 @@ export default function SessionPage() {
   const [useVoiceIntake, setUseVoiceIntake] = useState(true);
   const [liveIntakeRegion, setLiveIntakeRegion] = useState<import("@/types/exercise").BodyRegion | null>(null);
   const [liveIntakeResponses, setLiveIntakeResponses] = useState<Record<string, string>>({});
-  const narratorAbortRef = useRef<AbortController | null>(null);
   const [step, setStep] = useState<SessionStep>("loading");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
@@ -84,157 +78,20 @@ export default function SessionPage() {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [movementPhase, setMovementPhase] = useState<MovementPhase>("ready");
 
-  // Clinical Narrator state
-  const [narratorEntries, setNarratorEntries] = useState<NarratorEntry[]>([]);
-  const [showNarrator, setShowNarrator] = useState(true);
-
-  // Safety Monitor
-  const [haltReason, setHaltReason] = useState<string | null>(null);
-
-  // Vision faults
-  const [visionFaults, setVisionFaults] = useState<string[]>([]);
-
   // Tracking refs
   const sessionStartRef = useRef<number>(0);
   const repQualitiesRef = useRef<RepQuality[][]>([[]]);
   const peakAnglesRef = useRef<Record<string, number>[]>([]);
   const repsPerSetRef = useRef<number[]>([]);
 
-  // Auto rep detection state
+  // Rep detection state
   const peakAngleRef = useRef(0);
   const repPhaseRef = useRef<"idle" | "ascending" | "descending">("idle");
   const repStartTimeRef = useRef(0);
 
-  // Vision sampling
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const lastVisionTime = useRef(0);
-
   const currentExercise = plan?.exercises[currentExerciseIndex];
 
-  // Clinical Narrator — streams reasoning after each rep
-  const streamNarrator = useCallback(async (repContext: Record<string, unknown>) => {
-    if (!activeProfile) return;
-
-    // Abort any prior in-flight narrator stream before starting a new one.
-    narratorAbortRef.current?.abort();
-    const controller = new AbortController();
-    narratorAbortRef.current = controller;
-
-    try {
-      const res = await fetch("/api/narrator", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          session_id: `session_${sessionStartRef.current}`,
-          patient_id: activeProfile.id,
-          ...repContext,
-        }),
-      });
-
-      if (!res.body) return;
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const entryId = `nar_${Date.now()}`;
-
-      while (true) {
-        if (controller.signal.aborted) {
-          await reader.cancel().catch(() => {});
-          return;
-        }
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse SSE events
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.text) {
-                setNarratorEntries((prev) => {
-                  const existing = prev.find((e) => e.id === entryId);
-                  if (existing) {
-                    return prev.map((e) =>
-                      e.id === entryId ? { ...e, text: e.text + data.text } : e
-                    );
-                  }
-                  return [...prev.slice(-9), { id: entryId, text: data.text, timestamp: Date.now() }];
-                });
-              }
-            } catch {
-              // Ignore malformed SSE
-            }
-          }
-        }
-      }
-    } catch {
-      // Narrator failure is non-fatal (includes aborts)
-    }
-  }, [activeProfile]);
-
-  // Vision sampling — 1fps
-  const sendVisionFrame = useCallback(async () => {
-    if (!videoRef.current || !currentExercise) return;
-    const now = Date.now();
-    if (now - lastVisionTime.current < 1000) return;
-    lastVisionTime.current = now;
-
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 384;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(videoRef.current, 0, 0, 512, 384);
-      const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
-
-      // Run form-critic and safety-monitor in parallel
-      const [formRes, safetyRes] = await Promise.all([
-        fetch("/api/form-critic", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            exercise: currentExercise,
-            frame_base64: base64,
-            rep_data: { peak_angle: peakAngleRef.current },
-          }),
-        }).catch(() => null),
-        fetch("/api/safety-monitor", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_id: `session_${sessionStartRef.current}`,
-            frame_base64: base64,
-          }),
-        }).catch(() => null),
-      ]);
-
-      if (formRes) {
-        const formData = await formRes.json();
-        if (formData.faults?.length > 0) {
-          setVisionFaults(formData.faults.map((f: { description?: string; type?: string }) => f.description || f.type || ""));
-        }
-      }
-
-      if (safetyRes) {
-        const safetyData = await safetyRes.json();
-        if (safetyData.halt) {
-          setHaltReason(safetyData.red_flag_type || "Red flag detected");
-          setStep("halted");
-        }
-      }
-    } catch {
-      // Vision is best-effort
-    }
-  }, [currentExercise]);
-
-  // Check for existing active patient on mount. New accounts have zero
-  // patients — drop them straight into intake instead of a redundant
-  // "create a profile" screen (the account IS the profile).
+  // Check for existing active patient on mount.
   useEffect(() => {
     let cancelled = false;
     getActivePatient()
@@ -260,7 +117,7 @@ export default function SessionPage() {
     const dx = activeProfile.profile.diagnostic;
     setDiagnostic(dx);
     buildPlanFromDiagnostic(dx, activeProfile.session_count + 1);
-    setStep("pre_pain");
+    setStep("plan_review");
   }
 
   function handleNewIntake() {
@@ -303,8 +160,6 @@ export default function SessionPage() {
     if (activeProfile) {
       buildPlanFromDiagnostic(result, activeProfile.session_count + 1);
     } else {
-      // New account flow — name the patient after the signed-in user so
-      // the UI shows "@alice" instead of a generic "Patient".
       const me = await getCurrentUser().catch(() => null);
       const patientName = me?.username ? titleCase(me.username) : "Patient";
       const created = await createPatient(patientName, result);
@@ -312,7 +167,7 @@ export default function SessionPage() {
       setActiveProfile(created);
       buildPlanFromDiagnostic(result, 1);
     }
-    setStep("pre_pain");
+    setStep("diagnosis");
   }
 
   function handlePrePain(value: number) {
@@ -321,7 +176,6 @@ export default function SessionPage() {
     repQualitiesRef.current = [[]];
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
-    setNarratorEntries([]);
     setStep("exercising");
   }
 
@@ -350,16 +204,6 @@ export default function SessionPage() {
       const prev = peakAnglesRef.current[currentExerciseIndex][key] ?? 0;
       peakAnglesRef.current[currentExerciseIndex][key] = Math.max(prev, peakAngleRef.current);
     }
-
-    // Stream narrator reasoning (non-blocking)
-    streamNarrator({
-      current_exercise: currentExercise.name,
-      rep_number: newRep,
-      set_number: currentSet,
-      peak_angle: peakAngleRef.current,
-      target_angle: targetAngle,
-      quality,
-    });
 
     // Reset
     peakAngleRef.current = 0;
@@ -390,9 +234,6 @@ export default function SessionPage() {
     (_landmarks: Landmark[], angles: Record<string, number>) => {
       if (!currentExercise) return;
 
-      sendVisionFrame();
-
-      // Map exercise's primary joint angle to the correct calculated angle
       const side = diagnostic?.side === "right" ? "right" : "left";
       const primaryJoint = currentExercise.target_angles
         ? Object.keys(currentExercise.target_angles)[0] || "shoulder_flexion_degrees"
@@ -402,12 +243,15 @@ export default function SessionPage() {
       setCurrentAngle(angle);
 
       const targetAngle = Object.values(currentExercise.target_angles)[0];
-      const threshold = targetAngle * 0.3;
-      const peakThreshold = targetAngle * 0.7;
+      const startThreshold = Math.max(targetAngle * 0.25, 15);
+      const resetThreshold = Math.max(targetAngle * 0.15, 10);
+      const peakThreshold = targetAngle * 0.5;
+      const minRepDuration = 800;
+
       const phase = repPhaseRef.current;
 
       if (phase === "idle") {
-        if (angle > threshold) {
+        if (angle > startThreshold) {
           repPhaseRef.current = "ascending";
           repStartTimeRef.current = performance.now();
           peakAngleRef.current = angle;
@@ -417,22 +261,26 @@ export default function SessionPage() {
         }
       } else if (phase === "ascending") {
         if (angle > peakAngleRef.current) peakAngleRef.current = angle;
-        if (angle < peakAngleRef.current - 8) {
+        if (angle < peakAngleRef.current - 12) {
           repPhaseRef.current = "descending";
           setMovementPhase("lowering");
-        } else if (angle >= targetAngle * 0.9) {
+        } else if (angle >= targetAngle * 0.85) {
           setMovementPhase("holding");
         }
       } else if (phase === "descending") {
-        if (angle <= threshold) {
-          if (peakAngleRef.current >= peakThreshold) completeRep();
+        if (angle <= resetThreshold) {
+          const elapsed = performance.now() - repStartTimeRef.current;
+          if (peakAngleRef.current >= peakThreshold && elapsed >= minRepDuration) {
+            completeRep();
+          }
           repPhaseRef.current = "idle";
+          peakAngleRef.current = 0;
           setMovementPhase("ready");
         }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentExercise, diagnostic, currentRep, currentSet, currentExerciseIndex, plan, sendVisionFrame],
+    [currentExercise, diagnostic, currentRep, currentSet, currentExerciseIndex, plan],
   );
 
   function resumeFromRest() {
@@ -440,6 +288,22 @@ export default function SessionPage() {
     repPhaseRef.current = "idle";
     setMovementPhase("ready");
     setStep("exercising");
+  }
+
+  function skipExercise() {
+    if (!plan) return;
+    const nextIndex = currentExerciseIndex + 1;
+    if (nextIndex >= plan.exercises.length) {
+      setStep("post_pain");
+    } else {
+      repQualitiesRef.current[nextIndex] = [];
+      setCurrentExerciseIndex(nextIndex);
+      setCurrentSet(1);
+      setCurrentRep(0);
+      peakAngleRef.current = 0;
+      repPhaseRef.current = "idle";
+      setMovementPhase("ready");
+    }
   }
 
   async function handlePostPain(value: number) {
@@ -455,7 +319,6 @@ export default function SessionPage() {
     const endedAt = new Date().toISOString();
     const exercisesCompleted = currentExerciseIndex + 1;
 
-    // Flatten per-exercise results into set-level rows.
     const exerciseRows: ExerciseResult[] = [];
     plan.exercises.slice(0, exercisesCompleted).forEach((ex, i) => {
       const qualities = repQualitiesRef.current[i] ?? [];
@@ -463,7 +326,6 @@ export default function SessionPage() {
       const formQuality = qualities.length > 0 ? greenCount / qualities.length : 0;
       const setsCompleted = i < currentExerciseIndex ? ex.sets : currentSet;
 
-      // Preserve the old "one row per set" structure for the DB.
       for (let setNum = 1; setNum <= setsCompleted; setNum++) {
         exerciseRows.push({
           exercise_id: ex.id,
@@ -487,7 +349,6 @@ export default function SessionPage() {
         summary: null,
       });
 
-      // Refresh the cached session_count so Home/Progress pick up the new run.
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });
     } catch {
@@ -495,16 +356,12 @@ export default function SessionPage() {
     }
   }
 
-  // Steps where exiting loses unsaved work — we ask for confirmation.
   const MID_SESSION_STEPS: SessionStep[] = ["exercising", "rest", "post_pain"];
 
   function performExit() {
-    narratorAbortRef.current?.abort();
-    narratorAbortRef.current = null;
     setShowExitConfirm(false);
     // Hard navigation — MediaPipe's WASM loop can stall router.push and
     // the webcam media stream doesn't always release cleanly on soft nav.
-    // A full reload tears everything down in one shot.
     window.location.href = "/";
   }
 
@@ -515,14 +372,6 @@ export default function SessionPage() {
       performExit();
     }
   }
-
-  // On unmount, make sure the narrator SSE stream is released.
-  useEffect(() => {
-    return () => {
-      narratorAbortRef.current?.abort();
-      narratorAbortRef.current = null;
-    };
-  }, []);
 
   return (
     <main className="flex-1 flex flex-col p-4 gap-4" style={{ background: "var(--color-background)" }}>
@@ -539,27 +388,18 @@ export default function SessionPage() {
         </button>
 
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : step === "halted" ? "#ef4444" : "var(--color-accent)" }} />
+          <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : "var(--color-accent)" }} />
           <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{STEP_LABELS[step]}</span>
         </div>
 
         <div className="flex items-center gap-2">
-          {step === "exercising" && (
-            <button
-              onClick={() => setShowNarrator(!showNarrator)}
-              className="text-xs px-2 py-1 rounded"
-              style={{ background: showNarrator ? "var(--color-accent-dim)" : "var(--color-surface-raised)", color: showNarrator ? "var(--color-accent)" : "var(--color-text-muted)", border: "1px solid var(--color-border)" }}
-            >
-              Narrator
-            </button>
-          )}
           {plan && (
             <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>{currentExerciseIndex + 1}/{plan.exercises.length}</span>
           )}
         </div>
       </header>
 
-      {/* Loading — while we figure out if the user has an existing patient */}
+      {/* Loading */}
       {step === "loading" && (
         <div className="flex-1 flex items-center justify-center">
           <div className="spinner" />
@@ -586,7 +426,6 @@ export default function SessionPage() {
       {/* Intake */}
       {step === "intake" && (
         <div className="flex-1 flex gap-4 min-h-0 overflow-y-auto pt-2">
-          {/* Voice panel — left */}
           <div className="w-80 shrink-0">
             <ConversationalIntake
               onComplete={handleIntakeComplete}
@@ -597,14 +436,111 @@ export default function SessionPage() {
               }}
             />
           </div>
-
-          {/* Survey panel — right */}
           <div className="flex-1 min-w-0">
             <IntakeView
               onComplete={handleIntakeComplete}
               liveRegion={liveIntakeRegion}
               liveResponses={liveIntakeResponses}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Diagnosis Results */}
+      {step === "diagnosis" && diagnostic && (
+        <div className="flex-1 flex items-center justify-center animate-fade-in">
+          <div className="glass-card-bright p-8 max-w-lg w-full">
+            <h2 className="text-xl font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
+              Assessment Results
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Region</div>
+                <div className="text-sm font-medium capitalize" style={{ color: "var(--color-text-primary)" }}>{diagnostic.body_region}</div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Side</div>
+                <div className="text-sm font-medium capitalize" style={{ color: "var(--color-text-primary)" }}>{diagnostic.side}</div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Severity</div>
+                <div className="text-sm font-mono font-semibold" style={{ color: diagnostic.severity_score > 60 ? "#ef4444" : diagnostic.severity_score > 30 ? "#eab308" : "var(--color-success)" }}>
+                  {diagnostic.severity_score}/100
+                </div>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div className="data-label mb-1">Instrument</div>
+                <div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{diagnostic.instrument_used}</div>
+              </div>
+            </div>
+
+            {diagnostic.functional_deficits.length > 0 && (
+              <div className="mb-4">
+                <div className="data-label mb-2">Functional Deficits</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {diagnostic.functional_deficits.map((d, i) => (
+                    <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
+                      {d.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {diagnostic.red_flags.length > 0 && (
+              <div className="mb-4 p-3 rounded-xl" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
+                <div className="text-xs font-medium mb-1" style={{ color: "#ef4444" }}>Red Flags Detected</div>
+                {diagnostic.red_flags.map((f, i) => (
+                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mb-4 p-3 rounded-xl" style={{ background: diagnostic.cleared_for_exercise ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${diagnostic.cleared_for_exercise ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}` }}>
+              <div className="w-2 h-2 rounded-full" style={{ background: diagnostic.cleared_for_exercise ? "var(--color-success)" : "#ef4444" }} />
+              <span className="text-sm font-medium" style={{ color: diagnostic.cleared_for_exercise ? "var(--color-success)" : "#ef4444" }}>
+                {diagnostic.cleared_for_exercise ? "Cleared for exercise" : "Not cleared — refer to PT"}
+              </span>
+            </div>
+
+            <button onClick={() => setStep("plan_review")} className="btn-accent w-full">
+              View Exercise Plan
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Review */}
+      {step === "plan_review" && plan && (
+        <div className="flex-1 flex items-center justify-center animate-fade-in overflow-y-auto py-4">
+          <div className="glass-card-bright p-8 max-w-lg w-full">
+            <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+              Your Exercise Plan
+            </h2>
+            <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>
+              Session {plan.session_number} · ~{plan.estimated_duration_minutes} min · {plan.exercises.length} exercises
+            </p>
+
+            <div className="flex flex-col gap-2 mb-6">
+              {plan.exercises.map((ex, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: "var(--color-text-primary)" }}>{ex.name}</div>
+                    <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                      {ex.sets} sets × {ex.reps} reps · {ex.tempo_seconds} tempo
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => setStep("pre_pain")} className="btn-accent w-full">
+              Start Session
+            </button>
           </div>
         </div>
       )}
@@ -616,32 +552,13 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Exercise — main 3-panel layout */}
+      {/* Exercise — 2-panel layout */}
       {step === "exercising" && currentExercise && (
         <div className="flex-1 flex gap-4 min-h-0 animate-fade-in">
-          {/* Clinical Narrator panel (left) */}
-          {showNarrator && (
-            <aside className="w-72 flex flex-col gap-2 overflow-y-auto glass-card p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--color-accent)" }} />
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Reasoning</span>
-              </div>
-              {narratorEntries.length === 0 ? (
-                <p className="text-xs italic" style={{ color: "var(--color-text-muted)" }}>Reasoning will stream here as you exercise...</p>
-              ) : (
-                narratorEntries.map((entry) => (
-                  <div key={entry.id} className="text-xs leading-relaxed p-2 rounded-lg" style={{ background: "var(--color-surface-raised)", color: "var(--color-text-secondary)" }}>
-                    {entry.text}
-                  </div>
-                ))
-              )}
-            </aside>
-          )}
-
           {/* Webcam (center) */}
           <div className="flex-1 min-h-0">
             <Suspense fallback={<WebcamLoading />}>
-              <WebcamView showAngles onLandmarksDetected={handleLandmarks} onVideoReady={(v) => { videoRef.current = v; }} />
+              <WebcamView showAngles onLandmarksDetected={handleLandmarks} />
             </Suspense>
           </div>
 
@@ -662,15 +579,13 @@ export default function SessionPage() {
               targetAngle={Object.values(currentExercise.target_angles)[0]}
               phase={movementPhase}
             />
-            {/* Vision faults */}
-            {visionFaults.length > 0 && (
-              <div className="glass-card p-3" style={{ borderColor: "var(--color-warning)" }}>
-                <div className="text-xs font-medium mb-1" style={{ color: "#eab308" }}>Vision Detection</div>
-                {visionFaults.map((f, i) => (
-                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
-                ))}
-              </div>
-            )}
+            <button
+              onClick={skipExercise}
+              className="btn-ghost text-xs w-full"
+              style={{ opacity: 0.6 }}
+            >
+              Skip Exercise →
+            </button>
           </aside>
         </div>
       )}
@@ -695,27 +610,6 @@ export default function SessionPage() {
       {step === "post_pain" && (
         <div className="flex-1 flex items-center justify-center animate-fade-in">
           <PainScale label="How would you rate your pain now?" onSelect={handlePostPain} />
-        </div>
-      )}
-
-      {/* Session Halted — Red Flag */}
-      {step === "halted" && (
-        <div className="flex-1 flex items-center justify-center animate-fade-in">
-          <div className="glass-card-bright p-8 max-w-lg w-full text-center" style={{ borderColor: "#ef4444" }}>
-            <div className="w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ background: "rgba(239,68,68,0.15)" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round">
-                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-              </svg>
-            </div>
-            <h2 className="text-2xl font-semibold mb-3" style={{ color: "#ef4444" }}>Session Halted</h2>
-            <p className="text-sm mb-2" style={{ color: "var(--color-text-primary)" }}>
-              Safety Monitor detected: <strong>{haltReason}</strong>
-            </p>
-            <p className="text-sm mb-6" style={{ color: "var(--color-text-secondary)" }}>
-              This session has been stopped for your safety. Please consult with a licensed physical therapist or healthcare provider before continuing.
-            </p>
-            <Link href="/" className="btn-accent">Return Home</Link>
-          </div>
         </div>
       )}
 
@@ -753,16 +647,6 @@ export default function SessionPage() {
               </div>
             )}
 
-            {/* Narrator summary */}
-            {narratorEntries.length > 0 && (
-              <div className="glass-card p-4 mb-6 text-left">
-                <div className="text-xs font-medium mb-2 uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Notes</div>
-                <div className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
-                  {narratorEntries.slice(-3).map((e) => e.text).join(" ")}
-                </div>
-              </div>
-            )}
-
             <div className="flex gap-3 justify-center">
               <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
               <Link href="/" className="btn-accent">Return Home</Link>
@@ -770,6 +654,7 @@ export default function SessionPage() {
           </div>
         </div>
       )}
+
       {/* VoiceCoach — persisted across exercising/rest to prevent session remount */}
       {currentExercise && (step === "exercising" || step === "rest") && (
         <div
@@ -786,44 +671,34 @@ export default function SessionPage() {
             exerciseName={currentExercise.name}
             currentAngle={currentAngle}
             targetAngle={Object.values(currentExercise.target_angles)[0]}
-            visionFaults={visionFaults}
             isPaused={step === "rest"}
           />
         </div>
       )}
 
-      {/* Exit confirmation modal */}
+      {/* Exit confirmation */}
       {showExitConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in"
+          style={{ background: "rgba(6,10,14,0.7)", backdropFilter: "blur(4px)" }}
           onClick={() => setShowExitConfirm(false)}
         >
           <div
-            className="glass-card p-8 max-w-sm w-full mx-4 text-center"
+            className="glass-card-bright p-6 max-w-sm w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
-              Exit Session?
-            </h2>
-            <p className="text-sm mb-6" style={{ color: "var(--color-text-muted)" }}>
-              Your progress so far will be saved.
+            <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
+              Exit session?
+            </h3>
+            <p className="text-sm mb-5" style={{ color: "var(--color-text-secondary)" }}>
+              Your progress in this session won&apos;t be saved.
             </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => setShowExitConfirm(false)}
-                className="btn-ghost text-sm"
-              >
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowExitConfirm(false)} className="btn-ghost text-sm">
                 Keep Going
               </button>
-              <button
-                onClick={() => {
-                  narratorAbortRef.current?.abort();
-                  router.push("/");
-                }}
-                className="btn-accent"
-              >
-                Exit
+              <button onClick={performExit} className="btn-accent text-sm">
+                Exit Session
               </button>
             </div>
           </div>

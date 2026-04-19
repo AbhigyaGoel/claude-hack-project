@@ -208,47 +208,6 @@
     "progression": "Increase weight by 1lb"
   },
   {
-    "id": "scapular_retraction_01",
-    "name": "Scapular Retraction",
-    "body_region": "shoulder",
-    "category": "stabilization",
-    "difficulty_tier": 1,
-    "equipment": [],
-    "target_muscles": [
-      "rhomboids",
-      "middle_trapezius"
-    ],
-    "primary_joint_angle": "shoulder_extension_degrees",
-    "target_angles": {
-      "shoulder_extension_degrees": 20
-    },
-    "tolerances": {
-      "shoulder_extension_degrees": 15
-    },
-    "tempo_seconds": "2-3-2-0",
-    "default_sets": 3,
-    "default_reps": 10,
-    "cues": [
-      "Squeeze shoulder blades together",
-      "Hold the squeeze for 3 seconds",
-      "Don't shrug your shoulders \u00e2\u20ac\u201d keep them down"
-    ],
-    "compensation_patterns": [
-      {
-        "name": "scapular_elevation",
-        "detection": "shoulders rise toward ears during retraction",
-        "landmarks": [
-          11,
-          7
-        ],
-        "severity": "yellow"
-      }
-    ],
-    "contraindications": [],
-    "regression": "Seated position",
-    "progression": "Add resistance band"
-  },
-  {
     "id": "shoulder_abduction_standing_01",
     "name": "Standing Shoulder Abduction",
     "body_region": "shoulder",

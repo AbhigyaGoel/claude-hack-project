@@ -1,4 +1,4 @@
-import type { ClaudeTool } from "@/lib/claude";
+import type { ToolDef as ClaudeTool } from "@/lib/claude/client";
 import type { PatientProfile } from "@/types/patient";
 import type {
   ExercisePlan,
@@ -10,7 +10,7 @@ import type {
 } from "@/types/exercise";
 import type { SessionData } from "@/types/session";
 import { queryExercises } from "@/lib/exercises";
-import { callClaudeWithTools } from "@/lib/claude";
+import { callClaude } from "@/lib/claude/client";
 
 const SYSTEM_PROMPT = `You are Agent 2 — the Program Designer for Vero, an AI physical therapy system.
 
@@ -329,12 +329,12 @@ export async function designProgram(
 
   const userMessage = buildUserMessage(patientProfile, sessionHistory);
 
-  await callClaudeWithTools(
-    SYSTEM_PROMPT,
-    [{ role: "user", content: userMessage }],
+  await callClaude({
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userMessage }],
     tools,
     toolHandlers,
-  );
+  });
 
   if (!capturedPlan) {
     throw new Error("Program Designer did not generate a session plan.");
