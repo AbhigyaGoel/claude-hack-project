@@ -2,9 +2,9 @@
 
 ## Inspiration
 
-Physical therapy has an access problem. Over 60% of patients drop out before completing their prescribed rehab programs. The reasons are always the same: cost ($150+/session), scheduling friction, and the gap between weekly clinic visits where patients are left alone with a printout of exercises they half-remember. Rural and underserved communities have it worse: there simply aren't enough PTs.
+Physical therapy has an access problem. Studies show up to 70% of patients fail to complete their prescribed rehab programs, with home-based rehab adherence falling to 50–65%. The reasons are always the same: cost ($75–150/session out-of-pocket, often thousands over a full course), scheduling friction, and the gap between weekly clinic visits where patients are left alone with a printout of exercises they half-remember. Rural and underserved communities have it worse: there simply aren't enough PTs.
 
-We asked: what if a patient could have a physical therapist watching every single rep, catching compensations in real-time, adjusting the program on the fly, and explaining *why*, not once a week, but every session, from their living room?
+We asked: what if a patient could have a physical therapist watching every single rep, catching compensations in real-time, adjusting the program on the fly, and explaining _why_, not once a week, but every session, from their living room?
 
 That's Vero. A browser-native PT system where specialized Claude agents handle clinical reasoning while MediaPipe handles the biomechanics. No app install, no special hardware: just a webcam and a browser.
 
@@ -25,9 +25,7 @@ Vero runs a complete physical therapy session end-to-end:
    - **Progression Coach** evaluates the full session and recommends next steps (SOAP "P")
    - **Clinical Narrator** streams real-time reasoning to the patient
 
-5. **Longitudinal Tracking**: D3.js charts track form quality, pain trends, and volume across sessions. A nightly batch analysis agent detects patterns that per-session analysis misses: fatigue signatures, compensation trends, and plateaus.
-
-6. **PT Supervision via MCP**: A human PT can connect via Claude Desktop and use 6 MCP tools to review patients, inspect form events, and override exercise plans while keeping a human in the loop.
+5. **Longitudinal Tracking**: D3.js charts track form quality, pain trends, and volume across sessions.
 
 ## How we built it
 
@@ -41,7 +39,7 @@ $$\text{idle} \xrightarrow{\theta > 0.25\theta_{\text{target}}} \text{ascending}
 
 With an 800ms minimum duration filter to reject noise.
 
-**Claude Agents:** 7 specialized agents using `@anthropic-ai/sdk` with model routing: Sonnet 4.6 for clinical reasoning (form analysis, intake, narrator), Haiku 4.5 for latency-sensitive tasks (coaching). Each agent has a focused system prompt with structured output schemas.
+**Claude Agents:** 6 specialized agents using `@anthropic-ai/sdk` with model routing: Sonnet 4.6 for clinical reasoning (form analysis, intake, narrator), Haiku 4.5 for latency-sensitive tasks (coaching). Each agent has a focused system prompt with structured output schemas.
 
 **Voice:** ElevenLabs Conversational AI for the intake interview + TTS for per-rep coaching cues spoken by the Form Observer agent.
 
@@ -58,16 +56,6 @@ With an 800ms minimum duration filter to reject noise.
 **Animation system took 5+ iterations.** Wall slides, the simplest exercise, went through: arms crossing into an X, an upside-down W shape, the body sliding when it shouldn't, and compounding rotation errors from `rotateJointsAround`. We finally solved it with explicit keyframe interpolation instead of relative joint rotations.
 
 **Agent overcorrection.** Our first safety monitor flagged false positives on nearly every frame ("lateral lean detected," "possible fall risk") when the patient was just standing normally. We learned that more agents doesn't mean better: we cut the safety monitor and cue generator entirely, letting the Form Observer handle spoken feedback. Fewer, better agents beat many noisy ones.
-
-**Thinking API changes.** Mid-hackathon, `thinking.type: "enabled"` stopped working; the API had changed to `"adaptive"`. This broke every agent that used extended thinking until we tracked it down.
-
-**Network issues.** UCLA's campus network blocks Supabase Postgres ports (5432/6543). We lost time diagnosing before switching to a phone hotspot.
-
-**Claude text and ElevenLabs TTS.** Keeping spoken coaching aligned with what Claude generated meant juggling latency, streaming text, and the ElevenLabs API: when to start audio, how to cancel or replace overlapping speech, and how to avoid the voice saying something the model had already revised. Small timing bugs felt like big UX failures.
-
-**Database schema churn.** We started with a rough schema and kept evolving it as features landed (sessions, SOAP fields, narrator logs, patient memory). Each shift meant migrations, RLS policies, and fixing queries that assumed yesterday's columns. The app and DB were in constant negotiation.
-
-**Version control and keys (classic hackathon).** Divergent branches, stash-and-rebase loops, and "works on my machine" moments were part of the day. On top of that, we had to keep Anthropic, ElevenLabs, and Supabase credentials consistent across `.env`, deployment, and teammates' machines so nothing silently failed in demo.
 
 ## Accomplishments that we're proud of
 
