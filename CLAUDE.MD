@@ -10,10 +10,11 @@ Vero is a browser-native PT system where specialized Claude agents handle clinic
 
 - **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS
 - **Pose:** MediaPipe Tasks Vision (browser WASM), 33-keypoint BlazePose
-- **Claude:** `@anthropic-ai/sdk` — Sonnet 4.6 (form loop, orchestration), Haiku 4.5 (cues, safety)
+- **Claude:** `@anthropic-ai/sdk` — Sonnet 4.6 (form loop, orchestration), Haiku 4.5 (coaching)
 - **Voice:** ElevenLabs Conversational AI (intake) + TTS (coaching cues)
 - **Storage:** Supabase Postgres + Drizzle ORM
 - **Auth:** Simple username/password auth (demo-grade)
+- **SMS:** Textbelt for PT notification after sessions
 
 ---
 
@@ -23,27 +24,22 @@ During a live exercise session, these agents run in parallel:
 
 ```
 Session Page (client)
-    │
-    ├─ POST /api/form-critic      → formCritic agent (Sonnet) — per-rep quality analysis
-    ├─ POST /api/safety-monitor   → safetyMonitor agent (Haiku) — red-flag detection on webcam frames
-    ├─ POST /api/form-observer    → Form Observer (Sonnet) — SOAP "O" notes from webcam + keypoints
-    ├─ POST /api/clinical-reasoner → Clinical Reasoner (Sonnet) — SOAP "A" assessment per rep
-    ├─ POST /api/progression-coach → Progression Coach (Sonnet) — SOAP "P" plan adjustments
-    ├─ POST /api/cue              → cueGenerator agent (Haiku) — coaching text for ElevenLabs TTS
-    └─ POST /api/narrator         → clinicalNarrator agent (Sonnet) — SSE streaming reasoning
+    |
+    |- POST /api/form-critic      -> formCritic agent (Sonnet) — per-rep quality analysis
+    |- POST /api/form-observer    -> Form Observer (Sonnet) — SOAP "O" notes from webcam + keypoints
+    |- POST /api/clinical-reasoner -> Clinical Reasoner (Sonnet) — SOAP "A" assessment per set
+    |- POST /api/progression-coach -> Progression Coach (Haiku) — SOAP "P" plan adjustments
+    |- POST /api/narrator         -> clinicalNarrator agent (Sonnet) — SSE streaming reasoning
+    '- POST /api/notify-pt        -> SMS notification to supervising PT after session
 ```
 
 **Form Critic** — called after each completed rep. Receives exercise spec + peak angle. Returns `RepAnalysis { faults[], quality, compensations[], tempo_deviation }`. Faults display in the right sidebar.
 
-**Safety Monitor** — runs every 3 seconds on webcam frames (320x240 JPEG). Checks for grimacing, guarding, distress. If `halt: true`, session stops immediately.
+**Form Observer** — SOAP "O" agent. Analyzes webcam frames + keypoints to generate objective clinical observations per rep. Output is spoken aloud via TTS and persisted to `narrator_log`.
 
-**Form Observer** — SOAP "O" agent. Analyzes webcam frames + keypoints to generate objective clinical observations per rep.
+**Clinical Reasoner** — SOAP "A" agent. Takes observer notes + form critic data to produce clinical assessment per set. Persisted to `narrator_log`.
 
-**Clinical Reasoner** — SOAP "A" agent. Takes observer notes + form critic data to produce clinical assessment and reasoning.
-
-**Progression Coach** — SOAP "P" agent. Reads session history and current performance to recommend progression/regression decisions.
-
-**Cue Generator** — produces coaching text (max 15 words) with emotion tag for ElevenLabs TTS.
+**Progression Coach** — SOAP "P" agent. Reads session history and current performance to recommend progression/regression. Fires once at session end.
 
 **Clinical Narrator** — SSE streaming clinical reasoning narrative displayed to patient during session.
 
@@ -57,18 +53,17 @@ Session Page (client)
 |-------|------|-------|---------|
 | Diagnostic Interviewer | `diagnosticInterviewer.ts` | Sonnet | Structured ortho screen, SINSS framework, red flag detection |
 | Form Critic | `formCritic.ts` | Sonnet | Per-rep biomechanical analysis |
-| Safety Monitor | `safetyMonitor.ts` | Haiku | Red-flag detection, halt authority |
 | Clinical Narrator | `clinicalNarrator.ts` | Sonnet | SSE streaming clinical reasoning |
-| Cue Generator | `cueGenerator.ts` | Haiku | Instant verbal correction text |
 | Chat Agent | `chatAgent.ts` | Sonnet + memory | Between-session patient chat |
+| Session Report | `sessionReport.ts` | Sonnet | Post-session summary generation |
 
 ### Inline Route Agents (no separate agent file)
 
 | Agent | Route | Model | Purpose |
 |-------|-------|-------|---------|
-| Form Observer | `/api/form-observer` | Sonnet | SOAP "O" — objective observations from webcam |
-| Clinical Reasoner | `/api/clinical-reasoner` | Sonnet | SOAP "A" — clinical assessment per rep |
-| Progression Coach | `/api/progression-coach` | Sonnet | SOAP "P" — progression/regression decisions |
+| Form Observer | `/api/form-observer` | Sonnet/Haiku | SOAP "O" — objective observations from webcam |
+| Clinical Reasoner | `/api/clinical-reasoner` | Sonnet | SOAP "A" — clinical assessment per set |
+| Progression Coach | `/api/progression-coach` | Haiku | SOAP "P" — progression/regression decisions |
 
 ---
 
@@ -84,7 +79,7 @@ Session Page (client)
    - Center: webcam with MediaPipe skeleton overlay + angle labels
    - Right: rep counter, exercise demo animation, exercise guide, PT notes, form critic feedback, skip button
 7. **Post-Pain Rating** — 0-10 pain scale
-8. **Summary** — exercises completed, pain change, link to progress
+8. **Report** — redirects to `/report/[id]` for full session report with follow-up Q&A
 
 ---
 
@@ -144,7 +139,7 @@ Supabase-backed per-patient memory (`patient_memory` table):
 ## Database (Supabase Postgres + Drizzle)
 
 ```
-patients(id, user_id, name, profile_json, created_at)
+patients(id, user_id, name, profile_json, pt_phone, created_at)
 plans(id, patient_id, plan_json, active, citations_json, created_at)
 sessions(id, plan_id, patient_id, user_id, started_at, ended_at, pain_pre, pain_post, summary_json, artifact_url)
 sets(id, session_id, exercise_id, exercise_name, set_number, reps, rpe, pain, form_score)
@@ -158,24 +153,25 @@ patient_memory(id, patient_id, user_id, filename, content, updated_at)
 
 ---
 
-## API Routes (19 endpoints)
+## API Routes (18 endpoints)
 
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/api/auth/*` | POST | Login, signup, logout, me |
 | `/api/patients` | GET/POST | List/create patients |
-| `/api/patients/[id]` | GET/DELETE | Get/delete patient |
+| `/api/patients/[id]` | GET/PATCH/DELETE | Get/update/delete patient |
 | `/api/sessions` | GET/POST | List/save sessions |
+| `/api/sessions/[id]` | GET | Get single session |
+| `/api/sessions/start` | POST | Create session row at start |
 | `/api/intake` | POST | Run diagnostic intake agent |
 | `/api/form-critic` | POST | Per-rep form analysis |
-| `/api/safety-monitor` | POST | Red-flag detection |
 | `/api/form-observer` | POST | SOAP "O" — objective observations |
 | `/api/clinical-reasoner` | POST | SOAP "A" — clinical assessment |
 | `/api/progression-coach` | POST | SOAP "P" — progression decisions |
 | `/api/narrator` | POST | SSE streaming clinical reasoning |
-| `/api/cue` | POST | Coaching cue generation |
+| `/api/report` | POST | Session report generation |
+| `/api/notify-pt` | POST | SMS session summary to supervising PT via Textbelt |
 | `/api/chat` | POST | Between-session chat |
-| `/api/mcp` | GET/POST | MCP server for PT supervision |
 | `/api/batch/nightly` | POST | Overnight pattern analysis |
 | `/api/elevenlabs/*` | POST | TTS signed URLs |
 | `/api/tts` | POST | Text-to-speech |
@@ -187,19 +183,11 @@ patient_memory(id, patient_id, user_id, filename, content, updated_at)
 | Path | Purpose |
 |------|---------|
 | `/` | Home — profile badge, start session, view progress, chat |
-| `/session` | Live exercise session (intake -> plan -> exercise -> summary) |
+| `/session` | Live exercise session (intake -> plan -> exercise -> report) |
 | `/progress` | D3 charts: form quality, pain trends, volume, session history |
 | `/chat` | Between-session chat with Vero |
-| `/report/[id]` | Session report view (report generation endpoint pending rebuild) |
+| `/report/[id]` | Interactive session report with follow-up Q&A |
 | `/login` | Auth |
-
----
-
-## MCP Server
-
-`/api/mcp` exposes 6 tools for human PT supervision via Claude Desktop:
-- `list_patients`, `get_patient_summary`, `get_session_history`
-- `get_form_events`, `get_red_flags`, `override_plan`
 
 ---
 
