@@ -59,6 +59,9 @@ interface NarratorEntry {
 }
 
 export default function SessionPage() {
+  const narratorAbortRef = useRef<AbortController | null>(null);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
   const [step, setStep] = useState<SessionStep>("profile");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
@@ -102,10 +105,17 @@ export default function SessionPage() {
   // Clinical Narrator — streams reasoning after each rep
   const streamNarrator = useCallback(async (repContext: Record<string, unknown>) => {
     if (!activeProfile) return;
+
+    // Abort any prior in-flight narrator stream before starting a new one.
+    narratorAbortRef.current?.abort();
+    const controller = new AbortController();
+    narratorAbortRef.current = controller;
+
     try {
       const res = await fetch("/api/narrator", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           session_id: `session_${sessionStartRef.current}`,
           patient_id: activeProfile.id,
@@ -120,6 +130,10 @@ export default function SessionPage() {
       const entryId = `nar_${Date.now()}`;
 
       while (true) {
+        if (controller.signal.aborted) {
+          await reader.cancel().catch(() => {});
+          return;
+        }
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -149,7 +163,7 @@ export default function SessionPage() {
         }
       }
     } catch {
-      // Narrator failure is non-fatal
+      // Narrator failure is non-fatal (includes aborts)
     }
   }, [activeProfile]);
 
@@ -468,14 +482,48 @@ export default function SessionPage() {
     }
   }
 
+  // Steps where exiting loses unsaved work — we ask for confirmation.
+  const MID_SESSION_STEPS: SessionStep[] = ["exercising", "rest", "post_pain"];
+
+  function performExit() {
+    narratorAbortRef.current?.abort();
+    narratorAbortRef.current = null;
+    setShowExitConfirm(false);
+    // Hard navigation — MediaPipe's WASM loop can stall router.push and
+    // the webcam media stream doesn't always release cleanly on soft nav.
+    // A full reload tears everything down in one shot.
+    window.location.href = "/";
+  }
+
+  function handleExitClick() {
+    if (MID_SESSION_STEPS.includes(step)) {
+      setShowExitConfirm(true);
+    } else {
+      performExit();
+    }
+  }
+
+  // On unmount, make sure the narrator SSE stream is released.
+  useEffect(() => {
+    return () => {
+      narratorAbortRef.current?.abort();
+      narratorAbortRef.current = null;
+    };
+  }, []);
+
   return (
     <main className="flex-1 flex flex-col p-4 gap-4" style={{ background: "var(--color-background)" }}>
       {/* Header */}
       <header className="flex items-center justify-between px-2">
-        <Link href="/" className="flex items-center gap-2 text-sm font-medium transition-colors duration-200" style={{ color: "var(--color-text-muted)" }}>
+        <button
+          type="button"
+          onClick={handleExitClick}
+          className="flex items-center gap-2 text-sm font-medium transition-colors duration-200 hover:opacity-80"
+          style={{ color: "var(--color-text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
+        >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Exit
-        </Link>
+        </button>
 
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : step === "halted" ? "#ef4444" : "var(--color-accent)" }} />
@@ -695,6 +743,35 @@ export default function SessionPage() {
             <div className="flex gap-3 justify-center">
               <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
               <Link href="/" className="btn-accent">Return Home</Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exit confirmation — only shown mid-session */}
+      {showExitConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in"
+          style={{ background: "rgba(6,10,14,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowExitConfirm(false)}
+        >
+          <div
+            className="glass-card-bright p-6 max-w-sm w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
+              Exit session?
+            </h3>
+            <p className="text-sm mb-5" style={{ color: "var(--color-text-secondary)" }}>
+              Your progress in this session won&apos;t be saved.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowExitConfirm(false)} className="btn-ghost text-sm">
+                Keep Going
+              </button>
+              <button onClick={performExit} className="btn-accent text-sm">
+                Exit Session
+              </button>
             </div>
           </div>
         </div>
