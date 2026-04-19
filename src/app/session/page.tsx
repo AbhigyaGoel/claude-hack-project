@@ -816,30 +816,6 @@ export default function SessionPage() {
                 className="btn-accent"
               >
                 Exit
-
-      {/* Exit confirmation — only shown mid-session */}
-      {showExitConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in"
-          style={{ background: "rgba(6,10,14,0.7)", backdropFilter: "blur(4px)" }}
-          onClick={() => setShowExitConfirm(false)}
-        >
-          <div
-            className="glass-card-bright p-6 max-w-sm w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
-              Exit session?
-            </h3>
-            <p className="text-sm mb-5" style={{ color: "var(--color-text-secondary)" }}>
-              Your progress in this session won&apos;t be saved.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowExitConfirm(false)} className="btn-ghost text-sm">
-                Keep Going
-              </button>
-              <button onClick={performExit} className="btn-accent text-sm">
-                Exit Session
               </button>
             </div>
           </div>
