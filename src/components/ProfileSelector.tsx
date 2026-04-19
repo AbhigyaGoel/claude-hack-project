@@ -1,27 +1,65 @@
 "use client";
 
-import { useState } from "react";
-import type { StoredProfile } from "@/types/storage";
-import { getProfiles, saveProfile, deleteProfile, setActiveProfileId } from "@/lib/storage";
+import { useEffect, useState } from "react";
+import type { PatientRecord } from "@/types/storage";
+import {
+  listPatients,
+  createPatient,
+  deletePatient,
+  setActivePatientId,
+} from "@/lib/api";
 
 interface ProfileSelectorProps {
-  onSelect: (profile: StoredProfile) => void;
+  onSelect: (profile: PatientRecord) => void;
   onCreateNew: () => void;
 }
 
 export default function ProfileSelector({ onSelect, onCreateNew }: ProfileSelectorProps) {
-  const [profiles, setProfiles] = useState(() => getProfiles());
+  const [profiles, setProfiles] = useState<PatientRecord[]>([]);
   const [showNameInput, setShowNameInput] = useState(false);
   const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  function handleDelete(id: string) {
-    deleteProfile(id);
-    setProfiles(getProfiles());
+  useEffect(() => {
+    let cancelled = false;
+    listPatients()
+      .then((rows) => {
+        if (!cancelled) setProfiles(rows);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleDelete(id: string) {
+    await deletePatient(id);
+    setProfiles(await listPatients());
   }
 
-  function handleSelect(profile: StoredProfile) {
-    setActiveProfileId(profile.id);
+  function handleSelect(profile: PatientRecord) {
+    setActivePatientId(profile.id);
     onSelect(profile);
+  }
+
+  async function handleCreate() {
+    if (!name.trim()) return;
+    const created = await createPatient(name.trim(), null);
+    setProfiles(await listPatients());
+    setActivePatientId(created.id);
+    setShowNameInput(false);
+    setName("");
+    onCreateNew();
+  }
+
+  if (loading) {
+    return (
+      <div className="glass-card p-8 max-w-md mx-auto text-center">
+        <div className="spinner mx-auto" />
+      </div>
+    );
   }
 
   if (profiles.length === 0 && !showNameInput) {
@@ -50,32 +88,35 @@ export default function ProfileSelector({ onSelect, onCreateNew }: ProfileSelect
       </h2>
 
       <div className="flex flex-col gap-2 mb-4">
-        {profiles.map((p) => (
-          <div
-            key={p.id}
-            className="flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors"
-            style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}
-            onClick={() => handleSelect(p)}
-          >
-            <div>
-              <div className="font-medium text-sm" style={{ color: "var(--color-text-primary)" }}>
-                {p.name}
-              </div>
-              <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                {p.diagnostic.body_region} · {p.session_count} session{p.session_count !== 1 ? "s" : ""}
-              </div>
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
-              className="text-xs p-1 rounded hover:bg-red-500/20 transition-colors"
-              style={{ color: "var(--color-text-muted)" }}
+        {profiles.map((p) => {
+          const region = p.profile?.diagnostic?.body_region ?? "general";
+          return (
+            <div
+              key={p.id}
+              className="flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors"
+              style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}
+              onClick={() => handleSelect(p)}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-        ))}
+              <div>
+                <div className="font-medium text-sm" style={{ color: "var(--color-text-primary)" }}>
+                  {p.name}
+                </div>
+                <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  {region} · {p.session_count} session{p.session_count !== 1 ? "s" : ""}
+                </div>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
+                className="text-xs p-1 rounded hover:bg-red-500/20 transition-colors"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {showNameInput ? (
@@ -94,43 +135,11 @@ export default function ProfileSelector({ onSelect, onCreateNew }: ProfileSelect
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && name.trim()) {
-                const profile: StoredProfile = {
-                  id: `profile_${Date.now()}`,
-                  name: name.trim(),
-                  diagnostic: { body_region: "shoulder", side: "bilateral", onset: "", mechanism: "", severity_score: 0, instrument_used: "", functional_deficits: [], contraindications: [], red_flags: [], cleared_for_exercise: false },
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                  session_count: 0,
-                };
-                saveProfile(profile);
-                setActiveProfileId(profile.id);
-                setProfiles(getProfiles());
-                setShowNameInput(false);
-                setName("");
-                onCreateNew();
+                handleCreate();
               }
             }}
           />
-          <button
-            onClick={() => {
-              if (!name.trim()) return;
-              const profile: StoredProfile = {
-                id: `profile_${Date.now()}`,
-                name: name.trim(),
-                diagnostic: { body_region: "shoulder", side: "bilateral", onset: "", mechanism: "", severity_score: 0, instrument_used: "", functional_deficits: [], contraindications: [], red_flags: [], cleared_for_exercise: false },
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                session_count: 0,
-              };
-              saveProfile(profile);
-              setActiveProfileId(profile.id);
-              setProfiles(getProfiles());
-              setShowNameInput(false);
-              setName("");
-              onCreateNew();
-            }}
-            className="btn-accent text-sm px-4"
-          >
+          <button onClick={handleCreate} className="btn-accent text-sm px-4">
             Go
           </button>
         </div>

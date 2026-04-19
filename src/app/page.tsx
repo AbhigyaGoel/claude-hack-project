@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { StoredProfile } from "@/types/storage";
-import { getActiveProfile } from "@/lib/storage";
+import type { PatientRecord } from "@/types/storage";
+import { getActivePatient } from "@/lib/api";
 
 export default function Home() {
-  const [profile, setProfile] = useState<StoredProfile | null>(null);
+  const [profile, setProfile] = useState<PatientRecord | null>(null);
 
   useEffect(() => {
-    setProfile(getActiveProfile());
+    getActivePatient()
+      .then(setProfile)
+      .catch(() => setProfile(null));
   }, []);
 
   return (

@@ -81,8 +81,22 @@ export default function WebcamView({
           onLandmarksRef.current?.(landmarks, angles);
 
           if (showAnglesRef.current) {
-            drawAngleLabel(ctx, landmarks[11], angles.left_shoulder_flexion, canvas.width, canvas.height);
-            drawAngleLabel(ctx, landmarks[12], angles.right_shoulder_flexion, canvas.width, canvas.height);
+            // Show the most relevant non-trivial angles on the overlay
+            // Cervical angles displayed at nose landmark
+            if (angles.cervical_flexion > 3) {
+              drawAngleLabel(ctx, landmarks[0], angles.cervical_flexion, canvas.width, canvas.height);
+            }
+            // Show shoulder angles only if arms are raised significantly
+            if (angles.left_shoulder_flexion > 25) {
+              drawAngleLabel(ctx, landmarks[11], angles.left_shoulder_flexion, canvas.width, canvas.height);
+            }
+            if (angles.right_shoulder_flexion > 25) {
+              drawAngleLabel(ctx, landmarks[12], angles.right_shoulder_flexion, canvas.width, canvas.height);
+            }
+            // Show knee angles only if legs are bent
+            if (angles.left_knee_flexion < 160) {
+              drawAngleLabel(ctx, landmarks[25], 180 - angles.left_knee_flexion, canvas.width, canvas.height);
+            }
           }
         } else {
           ctx.clearRect(0, 0, canvas.width, canvas.height);

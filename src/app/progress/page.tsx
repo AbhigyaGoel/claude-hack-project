@@ -3,85 +3,80 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import ProgressChart from "@/components/ProgressChart";
-import type { StoredProfile, StoredSession } from "@/types/storage";
+import type { PatientRecord, SessionRecord } from "@/types/storage";
 import type { ChartDataPoint } from "@/agents/progressAnalyst";
-import { getProfiles, getActiveProfile, getSessionsForProfile, setActiveProfileId } from "@/lib/storage";
+import {
+  listPatients,
+  listSessions,
+  getActivePatientId,
+  setActivePatientId,
+} from "@/lib/api";
 
-function buildFormQualityData(sessions: StoredSession[]): ChartDataPoint[] {
+function buildFormQualityData(sessions: SessionRecord[]): ChartDataPoint[] {
   return sessions.map((s) => ({
     session_number: s.session_number,
-    date: s.date,
+    date: s.date ?? "",
     metric: "form_quality",
     value: s.avg_form_quality,
   }));
 }
 
-function buildPainData(sessions: StoredSession[], type: "pre" | "post"): ChartDataPoint[] {
+function buildPainData(sessions: SessionRecord[], type: "pre" | "post"): ChartDataPoint[] {
   return sessions.map((s) => ({
     session_number: s.session_number,
-    date: s.date,
+    date: s.date ?? "",
     metric: `pain_${type}`,
     value: type === "pre" ? s.pain_pre : s.pain_post,
   }));
 }
 
-function buildVolumeData(sessions: StoredSession[]): ChartDataPoint[] {
+function buildVolumeData(sessions: SessionRecord[]): ChartDataPoint[] {
   return sessions.map((s) => ({
     session_number: s.session_number,
-    date: s.date,
+    date: s.date ?? "",
     metric: "total_reps",
     value: s.total_reps,
   }));
 }
 
-function buildRomData(sessions: StoredSession[]): ChartDataPoint[] {
-  return sessions.map((s) => {
-    const exercises = s.exercises;
-    if (exercises.length === 0) return { session_number: s.session_number, date: s.date, metric: "rom", value: 0 };
-
-    const romPcts = exercises.map((ex) => {
-      const peakKeys = Object.keys(ex.peak_angles);
-      if (peakKeys.length === 0) return 0;
-      const avgPeak = peakKeys.reduce((sum, k) => sum + (ex.peak_angles[k] ?? 0), 0) / peakKeys.length;
-      const avgTarget = peakKeys.reduce((sum, k) => sum + (ex.target_angles[k] ?? 1), 0) / peakKeys.length;
-      return avgTarget > 0 ? Math.round((avgPeak / avgTarget) * 100) : 0;
-    });
-
-    return {
-      session_number: s.session_number,
-      date: s.date,
-      metric: "rom",
-      value: Math.round(romPcts.reduce((a, b) => a + b, 0) / romPcts.length),
-    };
-  });
-}
-
 export default function ProgressPage() {
-  const [profiles, setProfiles] = useState<StoredProfile[]>([]);
-  const [selectedProfile, setSelectedProfile] = useState<StoredProfile | null>(null);
-  const [sessions, setSessions] = useState<StoredSession[]>([]);
+  const [profiles, setProfiles] = useState<PatientRecord[]>([]);
+  const [selectedProfile, setSelectedProfile] = useState<PatientRecord | null>(null);
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const allProfiles = getProfiles();
-    setProfiles(allProfiles);
+    let cancelled = false;
+    (async () => {
+      try {
+        const all = await listPatients();
+        if (cancelled) return;
+        setProfiles(all);
 
-    const active = getActiveProfile();
-    if (active) {
-      setSelectedProfile(active);
-      setSessions(getSessionsForProfile(active.id));
-    } else if (allProfiles.length > 0) {
-      setSelectedProfile(allProfiles[0]);
-      setSessions(getSessionsForProfile(allProfiles[0].id));
-    }
+        const activeId = getActivePatientId();
+        const active = all.find((p) => p.id === activeId) ?? all[0] ?? null;
+        setSelectedProfile(active);
+
+        if (active) {
+          const s = await listSessions(active.id);
+          if (!cancelled) setSessions(s);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  function handleProfileChange(id: string) {
+  async function handleProfileChange(id: string) {
     const profile = profiles.find((p) => p.id === id);
-    if (profile) {
-      setSelectedProfile(profile);
-      setActiveProfileId(profile.id);
-      setSessions(getSessionsForProfile(profile.id));
-    }
+    if (!profile) return;
+    setSelectedProfile(profile);
+    setActivePatientId(profile.id);
+    const s = await listSessions(profile.id);
+    setSessions(s);
   }
 
   const hasSessions = sessions.length > 0;
@@ -90,6 +85,8 @@ export default function ProgressPage() {
     ? Math.round(sessions.reduce((sum, s) => sum + s.avg_form_quality, 0) / totalSessions)
     : 0;
   const totalMinutes = sessions.reduce((sum, s) => sum + s.duration_minutes, 0);
+  const bodyRegion =
+    selectedProfile?.profile?.diagnostic?.body_region ?? "general";
 
   return (
     <main className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto" style={{ background: "var(--color-background)" }}>
@@ -131,12 +128,16 @@ export default function ProgressPage() {
             {selectedProfile.name}
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-            {selectedProfile.diagnostic.body_region} program · {totalSessions} session{totalSessions !== 1 ? "s" : ""}
+            {bodyRegion} program · {totalSessions} session{totalSessions !== 1 ? "s" : ""}
           </p>
         </div>
       )}
 
-      {!hasSessions ? (
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="spinner" />
+        </div>
+      ) : !hasSessions ? (
         /* Empty State */
         <div className="flex-1 flex items-center justify-center animate-fade-in">
           <div className="text-center max-w-lg px-6">
@@ -214,12 +215,6 @@ export default function ProgressPage() {
               yLabel="Pain (0-10)"
               color="#f97316"
             />
-            <ProgressChart
-              data={buildRomData(sessions)}
-              title="ROM Achievement (%)"
-              yLabel="% of Target"
-              color="#8b5cf6"
-            />
           </div>
 
           {/* Session History */}
@@ -238,7 +233,7 @@ export default function ProgressPage() {
                       Session {s.session_number}
                     </div>
                     <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                      {new Date(s.date).toLocaleDateString()} · {s.duration_minutes}min · {s.exercises.length} exercises
+                      {s.date ? new Date(s.date).toLocaleDateString() : ""} · {s.duration_minutes}min · {s.exercises.length} exercises
                     </div>
                   </div>
                   <div className="flex items-center gap-4">

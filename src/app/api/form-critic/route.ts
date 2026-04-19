@@ -25,10 +25,6 @@ interface RepAnalysis {
   tempo_deviation: number;
 }
 
-function generateId(): string {
-  return `ra_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function parseAnalysis(raw: string): RepAnalysis {
   const cleaned = raw
     .replace(/```json\s*/g, "")
@@ -97,11 +93,10 @@ export async function POST(req: NextRequest) {
     if (set_id) {
       const db = getDb();
       await db.insert(repAnalyses).values({
-        id: generateId(),
         set_id,
         rep_num: rep_data.rep_number ?? 1,
         video_clip_url: null,
-        faults_json: JSON.stringify(analysis.faults),
+        faults_json: analysis.faults,
         quality: analysis.quality,
       });
     }
