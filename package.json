@@ -15,6 +15,7 @@
     "db:check": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/check-supabase.ts"
   },
   "dependencies": {
+    "@11labs/client": "^0.2.0",
     "@anthropic-ai/claude-code": "^2.1.101",
     "@anthropic-ai/sdk": "^0.88.0",
     "@mediapipe/tasks-vision": "^0.10.14",

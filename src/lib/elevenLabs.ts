@@ -159,7 +159,40 @@ export async function playAudioBuffer(audioBuffer: ArrayBuffer): Promise<void> {
   await handle.finished;
 }
 
-export async function speakCoachingCue(text: string): Promise<void> {
-  const audio = await textToSpeech(text);
+/** Emotion tag → voice parameter mapping (from CLAUDE.MD conditioning spec). */
+const EMOTION_CONFIGS: Record<string, Partial<TTSConfig>> = {
+  calm:          { stability: 0.7, similarityBoost: 0.8 },
+  calmly:        { stability: 0.7, similarityBoost: 0.8 },
+  encouraging:   { stability: 0.5, similarityBoost: 0.75 },
+  encouragingly: { stability: 0.5, similarityBoost: 0.75 },
+  warm:          { stability: 0.5, similarityBoost: 0.8 },
+  warmly:        { stability: 0.5, similarityBoost: 0.8 },
+  firm:          { stability: 0.8, similarityBoost: 0.85 },
+  firmly:        { stability: 0.8, similarityBoost: 0.85 },
+  urgent:        { stability: 0.9, similarityBoost: 0.9 },
+};
+
+/**
+ * Strips a leading [emotion] tag from a cue string and returns the clean
+ * text plus the matching TTSConfig overrides.
+ * e.g. "[firmly] Watch your form." → { text: "Watch your form.", config: { stability: 0.8, ... } }
+ */
+export function parseEmotionCue(raw: string): { text: string; config: Partial<TTSConfig> } {
+  const match = raw.match(/^\[(\w+)\]\s*/);
+  if (!match) return { text: raw, config: {} };
+  const emotion = match[1].toLowerCase();
+  return {
+    text: raw.slice(match[0].length),
+    config: EMOTION_CONFIGS[emotion] ?? {},
+  };
+}
+
+/**
+ * Speak a cue that may contain a leading [emotion] tag.
+ * The tag is stripped before sending to TTS; voice settings are adjusted accordingly.
+ */
+export async function speakCoachingCue(raw: string): Promise<void> {
+  const { text, config } = parseEmotionCue(raw);
+  const audio = await textToSpeech(text, config);
   await playAudioBuffer(audio);
 }

@@ -2,7 +2,9 @@
 
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import IntakeView from "@/components/IntakeView";
+import ConversationalIntake from "@/components/ConversationalIntake";
 import RepCounter from "@/components/RepCounter";
 import VoiceCoach from "@/components/VoiceCoach";
 import PainScale from "@/components/PainScale";
@@ -59,9 +61,12 @@ interface NarratorEntry {
 }
 
 export default function SessionPage() {
-  const narratorAbortRef = useRef<AbortController | null>(null);
+  const router = useRouter();
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-
+  const [useVoiceIntake, setUseVoiceIntake] = useState(true);
+  const [liveIntakeRegion, setLiveIntakeRegion] = useState<import("@/types/exercise").BodyRegion | null>(null);
+  const [liveIntakeResponses, setLiveIntakeResponses] = useState<Record<string, string>>({});
+  const narratorAbortRef = useRef<AbortController | null>(null);
   const [step, setStep] = useState<SessionStep>("profile");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
@@ -572,8 +577,27 @@ export default function SessionPage() {
 
       {/* Intake */}
       {step === "intake" && (
-        <div className="flex-1 flex items-start justify-center pt-4 overflow-y-auto">
-          <div className="w-full max-w-2xl"><IntakeView onComplete={handleIntakeComplete} /></div>
+        <div className="flex-1 flex gap-4 min-h-0 overflow-y-auto pt-2">
+          {/* Voice panel — left */}
+          <div className="w-80 shrink-0">
+            <ConversationalIntake
+              onComplete={handleIntakeComplete}
+              onFallbackToText={() => setUseVoiceIntake(false)}
+              onLiveUpdate={({ region, responses }) => {
+                if (region) setLiveIntakeRegion(region);
+                if (responses) setLiveIntakeResponses((prev) => ({ ...responses, ...prev }));
+              }}
+            />
+          </div>
+
+          {/* Survey panel — right */}
+          <div className="flex-1 min-w-0">
+            <IntakeView
+              onComplete={handleIntakeComplete}
+              liveRegion={liveIntakeRegion}
+              liveResponses={liveIntakeResponses}
+            />
+          </div>
         </div>
       )}
 
@@ -615,15 +639,6 @@ export default function SessionPage() {
 
           {/* Controls sidebar (right) */}
           <aside className="w-80 flex flex-col gap-3 overflow-y-auto">
-            <VoiceCoach
-              currentRep={currentRep}
-              totalReps={currentExercise.reps}
-              currentSet={currentSet}
-              totalSets={currentExercise.sets}
-              lastRepQuality={lastRepQuality}
-              movementPhase={movementPhase}
-              exerciseName={currentExercise.name}
-            />
             <RepCounter
               currentRep={currentRep}
               totalReps={currentExercise.reps}
@@ -747,6 +762,60 @@ export default function SessionPage() {
           </div>
         </div>
       )}
+      {/* VoiceCoach — persisted across exercising/rest to prevent session remount */}
+      {currentExercise && (step === "exercising" || step === "rest") && (
+        <div
+          className="fixed bottom-4 right-4 w-72 z-40"
+          style={{ display: step === "exercising" ? "block" : "none" }}
+        >
+          <VoiceCoach
+            currentRep={currentRep}
+            totalReps={currentExercise.reps}
+            currentSet={currentSet}
+            totalSets={currentExercise.sets}
+            lastRepQuality={lastRepQuality}
+            movementPhase={movementPhase}
+            exerciseName={currentExercise.name}
+            currentAngle={currentAngle}
+            targetAngle={Object.values(currentExercise.target_angles)[0]}
+            visionFaults={visionFaults}
+            isPaused={step === "rest"}
+          />
+        </div>
+      )}
+
+      {/* Exit confirmation modal */}
+      {showExitConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowExitConfirm(false)}
+        >
+          <div
+            className="glass-card p-8 max-w-sm w-full mx-4 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
+              Exit Session?
+            </h2>
+            <p className="text-sm mb-6" style={{ color: "var(--color-text-muted)" }}>
+              Your progress so far will be saved.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="btn-ghost text-sm"
+              >
+                Keep Going
+              </button>
+              <button
+                onClick={() => {
+                  narratorAbortRef.current?.abort();
+                  router.push("/");
+                }}
+                className="btn-accent"
+              >
+                Exit
 
       {/* Exit confirmation — only shown mid-session */}
       {showExitConfirm && (
