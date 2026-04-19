@@ -3,11 +3,15 @@ import { buildAgentPayload } from "@/lib/conversationalIntakeConfig";
 
 const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
 
+// Bump when voice/prompt config changes
+const INTAKE_CONFIG_VERSION = "v3-brian-turbo";
+
 /** Module-level cache — survives across requests in the same Node.js process. */
 let cachedAgentId: string | null = null;
+let cachedConfigVersion: string | null = null;
 
 async function getOrCreateAgent(apiKey: string): Promise<string> {
-  if (cachedAgentId) return cachedAgentId;
+  if (cachedAgentId && cachedConfigVersion === INTAKE_CONFIG_VERSION) return cachedAgentId;
 
   const res = await fetch(`${ELEVENLABS_BASE}/convai/agents/create`, {
     method: "POST",
@@ -25,6 +29,7 @@ async function getOrCreateAgent(apiKey: string): Promise<string> {
 
   const data = await res.json();
   cachedAgentId = data.agent_id as string;
+  cachedConfigVersion = INTAKE_CONFIG_VERSION;
   return cachedAgentId;
 }
 

@@ -3,10 +3,14 @@ import { buildCoachAgentPayload } from "@/lib/coachAgentConfig";
 
 const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
 
+// Bump when voice/prompt config changes so the module-level cache is invalidated
+const COACH_CONFIG_VERSION = "v5-ptt-greeting";
+
 let cachedAgentId: string | null = null;
+let cachedConfigVersion: string | null = null;
 
 async function getOrCreateCoachAgent(apiKey: string): Promise<string> {
-  if (cachedAgentId) return cachedAgentId;
+  if (cachedAgentId && cachedConfigVersion === COACH_CONFIG_VERSION) return cachedAgentId;
 
   const res = await fetch(`${ELEVENLABS_BASE}/convai/agents/create`, {
     method: "POST",
@@ -21,6 +25,7 @@ async function getOrCreateCoachAgent(apiKey: string): Promise<string> {
 
   const data = await res.json();
   cachedAgentId = data.agent_id as string;
+  cachedConfigVersion = COACH_CONFIG_VERSION;
   return cachedAgentId;
 }
 

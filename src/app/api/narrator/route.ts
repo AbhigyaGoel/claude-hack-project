@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           const stream = streamClaude({
-            model: "claude-opus-4-7-20250219",
+            model: "claude-sonnet-4-6-20250514",
             system: NARRATOR_SYSTEM,
             systemParts,
             messages: [
@@ -50,8 +50,7 @@ export async function POST(req: NextRequest) {
                 content: `Provide clinical reasoning narration for this moment in the session:\n${prompt}`,
               },
             ],
-            maxTokens: 2048,
-            thinking: { type: "enabled", budget_tokens: 8192 },
+            maxTokens: 1024,
           });
 
           for await (const chunk of stream) {

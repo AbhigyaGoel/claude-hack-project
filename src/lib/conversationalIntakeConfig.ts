@@ -119,7 +119,7 @@ export function buildAgentPayload() {
         language: "en",
       },
       tts: {
-        voice_id: "21m00Tcm4TlvDq8ikWAM", // Rachel
+        voice_id: "nPczCjzI2devNBz1zQrb", // Brian — deep, warm, narrative male
         model_id: "eleven_turbo_v2",
       },
     },

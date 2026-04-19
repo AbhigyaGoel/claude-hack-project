@@ -1,4 +1,3 @@
-const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
 
 export interface TTSConfig {
   voiceId: string;
@@ -8,7 +7,7 @@ export interface TTSConfig {
 }
 
 const DEFAULT_CONFIG: TTSConfig = {
-  voiceId: "21m00Tcm4TlvDq8ikWAM", // Rachel — default voice
+  voiceId: "nPczCjzI2devNBz1zQrb", // Brian — deep, warm, narrative male
   modelId: "eleven_flash_v2_5",
   stability: 0.5,
   similarityBoost: 0.75,
@@ -18,37 +17,18 @@ export async function textToSpeech(
   text: string,
   config: Partial<TTSConfig> = {},
 ): Promise<ArrayBuffer> {
-  const apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY;
-  if (!apiKey) {
-    throw new Error("NEXT_PUBLIC_ELEVENLABS_API_KEY is not set");
-  }
+  const { voiceId, stability, similarityBoost } = { ...DEFAULT_CONFIG, ...config };
 
-  const { voiceId, modelId, stability, similarityBoost } = {
-    ...DEFAULT_CONFIG,
-    ...config,
-  };
-
-  const response = await fetch(
-    `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text,
-        model_id: modelId,
-        voice_settings: {
-          stability,
-          similarity_boost: similarityBoost,
-        },
-      }),
-    },
-  );
+  // Route through server-side proxy to keep the API key out of the browser
+  const response = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voiceId, stability, similarityBoost }),
+  });
 
   if (!response.ok) {
-    throw new Error(`ElevenLabs TTS failed: ${response.status} ${response.statusText}`);
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(`TTS failed: ${response.status} ${detail?.error ?? ""}`);
   }
 
   return response.arrayBuffer();
@@ -68,35 +48,32 @@ export interface PlaybackHandle {
 export function playAudioBufferCancellable(audioBuffer: ArrayBuffer): PlaybackHandle {
   const audioContext = new AudioContext();
   let stopped = false;
+  let contextClosed = false;
+
+  const closeCtx = () => {
+    if (!contextClosed) {
+      contextClosed = true;
+      audioContext.close().catch(() => {});
+    }
+  };
 
   const finished = audioContext.decodeAudioData(audioBuffer.slice(0)).then(
     (decodedAudio) => {
-      if (stopped) {
-        audioContext.close();
-        return;
-      }
+      if (stopped) { closeCtx(); return; }
 
       const source = audioContext.createBufferSource();
       source.buffer = decodedAudio;
       source.connect(audioContext.destination);
 
       return new Promise<void>((resolve) => {
-        source.onended = () => {
-          audioContext.close();
-          resolve();
-        };
+        source.onended = () => { closeCtx(); resolve(); };
         source.start(0);
 
-        // Store stop callback so handle.stop() can call it
         handle.stop = () => {
           if (!stopped) {
             stopped = true;
-            try {
-              source.stop();
-            } catch {
-              // already stopped
-            }
-            audioContext.close();
+            try { source.stop(); } catch { /* already stopped */ }
+            closeCtx();
             resolve();
           }
         };
