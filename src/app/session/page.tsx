@@ -36,7 +36,7 @@ function titleCase(s: string): string {
 // specific Supabase table write (or a write that's expected but not wired yet).
 //
 // Tables written during the exercise loop:
-//   ✓ narrator_log      (via /api/rep-commentary, one row per rep)
+//   ✓ narrator_log      (observer / reasoner / coach rows — three agents)
 //   ✓ sessions, sets    (via /api/sessions POST at workout end)
 //   ~ rep_analyses      (written inside /api/sessions if faults provided)
 //   ✗ form_events       (no endpoint; route dir empty)
@@ -63,6 +63,27 @@ function logVeroWarn(msg: string, data?: unknown) {
   } else {
     console.warn(`[VERO ⚠] ${msg}`);
   }
+}
+
+/**
+ * Grab a JPEG frame from the live video. Returns base64 (no data: prefix)
+ * or null if the video isn't ready yet. Downscaled so the upload is small
+ * enough for a fire-and-forget request to Claude Vision.
+ */
+function captureFrame(
+  video: HTMLVideoElement | null,
+  maxWidth = 640,
+  quality = 0.7,
+): string | null {
+  if (!video || !video.videoWidth || !video.videoHeight) return null;
+  const aspect = video.videoWidth / video.videoHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.min(maxWidth, video.videoWidth);
+  canvas.height = Math.round(canvas.width / aspect);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", quality).split(",")[1] ?? null;
 }
 
 const WebcamView = lazy(() => import("@/components/WebcamView"));
@@ -103,7 +124,14 @@ export default function SessionPage() {
   const [liveIntakeResponses, setLiveIntakeResponses] = useState<Record<string, string>>({});
   const [step, setStep] = useState<SessionStep>("loading");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
-  const [commentaryEntries, setCommentaryEntries] = useState<Array<{ id: string; text: string }>>([]);
+  const [commentaryEntries, setCommentaryEntries] = useState<
+    Array<{ id: string; text: string; source: "observer" | "reasoner" | "coach" }>
+  >([]);
+  const [coachOutput, setCoachOutput] = useState<{
+    message: string;
+    next_steps: string[];
+    resources: { title: string; description: string }[];
+  } | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -128,6 +156,9 @@ export default function SessionPage() {
   const repQualitiesRef = useRef<RepQuality[][]>([[]]);
   const peakAnglesRef = useRef<Record<string, number>[]>([]);
   const repsPerSetRef = useRef<number[]>([]);
+  // Observer notes for the set currently in progress. Reset at set start,
+  // passed to the Reasoner at set end.
+  const currentSetObserverNotesRef = useRef<string[]>([]);
 
   // Rep detection state
   const peakAngleRef = useRef(0);
@@ -344,7 +375,9 @@ export default function SessionPage() {
     repQualitiesRef.current = [[]];
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
+    currentSetObserverNotesRef.current = [];
     setCommentaryEntries([]);
+    setCoachOutput(null);
 
     logVero(
       `▶ Session starting — patient=${activeProfile?.id ?? "?"} exercise=${currentExercise?.name ?? "?"} pain_pre=${value}`,
@@ -367,7 +400,7 @@ export default function SessionPage() {
     }
 
     logVero(
-      "During the workout: each rep → POST /api/rep-commentary → narrator_log (source=rep_analysis). form-critic / safety / narrator endpoints return 404 — those tables stay empty.",
+      "3-agent pipeline: per-rep Form Observer (Haiku) → per-set Clinical Reasoner (Sonnet) → end-of-session Progression Coach (Opus). All write to narrator_log tagged by source.",
     );
     setStep("exercising");
   }
@@ -406,12 +439,17 @@ export default function SessionPage() {
     callFormCritic(currentExercise, savedPeak, newRep);
     callNarrator(currentExercise, newRep, quality, savedPeak);
 
-    // Also persist one-sentence rep commentary for chat memory/RAG.
+    // Agent 1 — Form Observer (per-rep, Sonnet Vision). Objective
+    // observation grounded in an actual webcam frame; falls back to
+    // text-only Haiku server-side if no frame is available.
     if (activeProfile) {
-      const fetchId = `rep_${Date.now()}`;
+      const fetchId = `obs_${Date.now()}`;
       const t0 = performance.now();
-      logVero(`🧠 Asking Claude for PT note (rep ${newRep})...`);
-      fetch("/api/rep-commentary", {
+      const frame = captureFrame(videoRef.current);
+      logVero(
+        `🧠 Observer: analyzing rep ${newRep} ${frame ? "(with vision frame)" : "(no frame — text-only fallback)"}...`,
+      );
+      fetch("/api/form-observer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -424,31 +462,37 @@ export default function SessionPage() {
           target_angle: targetAngle,
           quality,
           t_ms: Date.now() - sessionStartRef.current,
+          frame_base64: frame ?? undefined,
         }),
       })
         .then(async (r) => {
           const ms = Math.round(performance.now() - t0);
           if (!r.ok) {
-            logVeroWarn(`rep-commentary ${r.status} after ${ms}ms — narrator_log NOT written`);
+            logVeroWarn(`form-observer ${r.status} after ${ms}ms — narrator_log NOT written`);
             return null;
           }
           const data = await r.json();
           if (data?.commentary) {
+            const modeLabel = data.used_vision ? "vision" : "text";
             logVeroOk(
-              `📝 Wrote narrator_log row (rep ${newRep}, ${ms}ms): "${data.commentary}"`,
+              `👁 Observer [${modeLabel}, rep ${newRep}, ${ms}ms]: "${data.commentary}"`,
             );
+            currentSetObserverNotesRef.current.push(data.commentary);
           } else {
-            logVeroWarn(`rep-commentary returned empty commentary (${ms}ms)`);
+            logVeroWarn(`form-observer returned empty commentary (${ms}ms)`);
           }
           return data;
         })
         .then((data) => {
           if (data?.commentary) {
-            setCommentaryEntries((prev) => [...prev.slice(-4), { id: fetchId, text: data.commentary }]);
+            setCommentaryEntries((prev) => [
+              ...prev.slice(-8),
+              { id: fetchId, text: data.commentary, source: "observer" },
+            ]);
           }
         })
         .catch((err) => {
-          logVeroWarn("rep-commentary fetch threw", err);
+          logVeroWarn("form-observer fetch threw", err);
         });
     }
 
@@ -458,6 +502,58 @@ export default function SessionPage() {
 
     if (newRep >= currentExercise.reps) {
       repsPerSetRef.current.push(newRep);
+
+      // Agent 2 — Clinical Reasoner. Fires once per set with that set's
+      // observer notes. Snapshot the array now (observer fetches finishing
+      // after this point won't be included, and that's fine).
+      if (activeProfile) {
+        const observerNotes = [...currentSetObserverNotesRef.current];
+        currentSetObserverNotesRef.current = [];
+        const completedSetNumber = currentSet;
+        const completedExerciseName = currentExercise.name;
+        const t0 = performance.now();
+        logVero(
+          `🧩 Reasoner: analyzing set ${completedSetNumber} (${observerNotes.length} observer notes)...`,
+        );
+        fetch("/api/clinical-reasoner", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patient_id: activeProfile.id,
+            session_id: sessionIdRef.current,
+            exercise_name: completedExerciseName,
+            set_number: completedSetNumber,
+            observer_notes: observerNotes,
+            t_ms: Date.now() - sessionStartRef.current,
+          }),
+        })
+          .then(async (r) => {
+            const ms = Math.round(performance.now() - t0);
+            if (!r.ok) {
+              logVeroWarn(`clinical-reasoner ${r.status} after ${ms}ms`);
+              return null;
+            }
+            const data = await r.json();
+            if (data?.commentary) {
+              logVeroOk(
+                `🩺 Reasoner [set ${completedSetNumber}, ${ms}ms]: "${data.commentary}"`,
+              );
+            }
+            return data;
+          })
+          .then((data) => {
+            if (data?.commentary) {
+              setCommentaryEntries((prev) => [
+                ...prev.slice(-8),
+                { id: `rsn_${Date.now()}`, text: data.commentary, source: "reasoner" },
+              ]);
+            }
+          })
+          .catch((err) => {
+            logVeroWarn("clinical-reasoner fetch threw", err);
+          });
+      }
+
       if (currentSet >= currentExercise.sets) {
         const nextIndex = currentExerciseIndex + 1;
         if (nextIndex >= (plan?.exercises.length ?? 0)) {
@@ -610,8 +706,47 @@ export default function SessionPage() {
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });
 
+      // Agent 3 — Progression Coach. Fires once, takes the whole session +
+      // prior history, produces a plain-language recap for the patient.
+      const coachSessionId = sessionIdRef.current ?? result.id;
+      logVero("🎯 Coach: generating plain-language recap (Opus + extended thinking)...");
+      const t0 = performance.now();
+      try {
+        const coachRes = await fetch("/api/progression-coach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patient_id: activeProfile.id,
+            session_id: coachSessionId,
+          }),
+        });
+        const ms = Math.round(performance.now() - t0);
+        if (!coachRes.ok) {
+          logVeroWarn(`progression-coach ${coachRes.status} after ${ms}ms`);
+        } else {
+          const coachData = await coachRes.json();
+          if (coachData?.coach) {
+            setCoachOutput(coachData.coach);
+            logVeroOk(`💬 Coach [${ms}ms]: "${coachData.coach.message}"`);
+            setCommentaryEntries((prev) => [
+              ...prev.slice(-8),
+              {
+                id: `coach_${Date.now()}`,
+                text: coachData.coach.message,
+                source: "coach",
+              },
+            ]);
+          } else {
+            logVeroWarn(`progression-coach returned no coach output (${ms}ms)`);
+          }
+        }
+      } catch (err) {
+        logVeroWarn("progression-coach fetch threw", err);
+      }
+
       // Coverage summary — what actually made it to Supabase.
       const totalReps = repQualitiesRef.current.flat().length;
+      const totalSetsCompleted = repsPerSetRef.current.length;
       console.log(
         "%c[VERO] — Session coverage summary —",
         "color: #38bdc3; font-weight: bold",
@@ -619,8 +754,9 @@ export default function SessionPage() {
       console.table({
         "sessions row": "✓ 1 written",
         "sets rows": `✓ ${exerciseRows.length} written`,
-        "narrator_log rows (rep notes)": `✓ ~${totalReps} written (one per rep via rep-commentary)`,
-        "rep_analyses rows": "~ only if faults provided in /api/sessions payload (currently none)",
+        "narrator_log — observer (rep notes)": `✓ ~${totalReps} written`,
+        "narrator_log — reasoner (set notes)": `✓ ~${totalSetsCompleted} written`,
+        "narrator_log — coach (session recap)": "✓ 1 written",
         "form_events rows": "✗ 0 — /api/form-critic endpoint not wired",
         "red_flags rows": "✗ 0 — /api/safety-monitor endpoint not wired",
       });
@@ -1022,18 +1158,38 @@ export default function SessionPage() {
                     PT Notes
                   </span>
                 </div>
-                {commentaryEntries.slice(-3).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="text-xs leading-relaxed p-2 rounded-lg"
-                    style={{
-                      background: "var(--color-surface-raised)",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    {entry.text}
-                  </div>
-                ))}
+                {commentaryEntries.slice(-3).map((entry) => {
+                  const sourceLabel =
+                    entry.source === "observer"
+                      ? "Observer"
+                      : entry.source === "reasoner"
+                        ? "Reasoner"
+                        : "Coach";
+                  const sourceColor =
+                    entry.source === "observer"
+                      ? "#38bdc3"
+                      : entry.source === "reasoner"
+                        ? "#8b5cf6"
+                        : "#22c55e";
+                  return (
+                    <div
+                      key={entry.id}
+                      className="text-xs leading-relaxed p-2 rounded-lg flex flex-col gap-1"
+                      style={{
+                        background: "var(--color-surface-raised)",
+                        color: "var(--color-text-secondary)",
+                      }}
+                    >
+                      <span
+                        className="text-[10px] font-medium uppercase tracking-wide"
+                        style={{ color: sourceColor }}
+                      >
+                        {sourceLabel}
+                      </span>
+                      <span>{entry.text}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <button
@@ -1081,14 +1237,16 @@ export default function SessionPage() {
 
       {/* Summary */}
       {step === "summary" && (
-        <div className="flex-1 flex items-center justify-center animate-fade-in">
-          <div className="glass-card-bright p-8 max-w-lg w-full text-center">
-            <div className="w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ background: "var(--color-success-dim)" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+        <div className="flex-1 flex items-center justify-center animate-fade-in p-6 overflow-y-auto">
+          <div className="glass-card-bright p-8 max-w-xl w-full">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--color-success-dim)" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+              <h2 className="text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>Session Complete</h2>
             </div>
-            <h2 className="text-2xl font-semibold mb-6" style={{ color: "var(--color-text-primary)" }}>Session Complete</h2>
 
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="grid grid-cols-2 gap-3 mb-5">
               <div className="p-4 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
                 <div className="text-3xl font-semibold font-mono" style={{ color: "var(--color-accent)" }}>{plan?.exercises.length}</div>
                 <div className="data-label mt-1">Exercises</div>
@@ -1106,14 +1264,67 @@ export default function SessionPage() {
             </div>
 
             {painPre !== null && painPost !== null && (
-              <div className="flex items-center justify-center gap-6 mb-6 text-sm">
+              <div className="flex items-center justify-center gap-6 mb-5 text-sm">
                 <div><span className="data-label mr-1.5">Before</span><span className="font-mono" style={{ color: "var(--color-text-primary)" }}>{painPre}/10</span></div>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 <div><span className="data-label mr-1.5">After</span><span className="font-mono" style={{ color: "var(--color-text-primary)" }}>{painPost}/10</span></div>
               </div>
             )}
 
-            <div className="flex gap-3 justify-center">
+            {/* Progression Coach output — plain-language recap */}
+            {coachOutput ? (
+              <div className="flex flex-col gap-4 text-left">
+                <div className="p-4 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                  <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#22c55e" }}>
+                    Your Coach
+                  </div>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-primary)" }}>
+                    {coachOutput.message}
+                  </p>
+                </div>
+
+                {coachOutput.next_steps.length > 0 && (
+                  <div className="p-4 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                    <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "var(--color-accent)" }}>
+                      Next Time
+                    </div>
+                    <ul className="flex flex-col gap-1.5">
+                      {coachOutput.next_steps.map((s, i) => (
+                        <li key={i} className="text-sm flex gap-2" style={{ color: "var(--color-text-secondary)" }}>
+                          <span style={{ color: "var(--color-accent)" }}>→</span>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {coachOutput.resources.length > 0 && (
+                  <div className="p-4 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                    <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "var(--color-text-muted)" }}>
+                      Worth Checking Out
+                    </div>
+                    <ul className="flex flex-col gap-2">
+                      {coachOutput.resources.map((r, i) => (
+                        <li key={i} className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                          <span className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                            {r.title}
+                          </span>{" "}
+                          — {r.description}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl text-center text-sm" style={{ background: "var(--color-surface-raised)", color: "var(--color-text-muted)" }}>
+                <div className="spinner mx-auto mb-2" />
+                Coach is writing your recap...
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-center mt-6">
               <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
               <Link href="/" className="btn-accent">Return Home</Link>
             </div>
