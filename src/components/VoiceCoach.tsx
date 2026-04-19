@@ -18,8 +18,6 @@ interface VoiceCoachProps {
   readonly currentAngle?: number;
   /** Target angle for the current exercise */
   readonly targetAngle?: number;
-  /** Latest vision faults from the form critic */
-  readonly visionFaults?: string[];
   /** Pause contextual updates (e.g. during rest period) without disconnecting */
   readonly isPaused?: boolean;
 }
@@ -35,7 +33,6 @@ export default function VoiceCoach({
   exerciseName,
   currentAngle,
   targetAngle,
-  visionFaults,
   isPaused = false,
 }: VoiceCoachProps) {
   const [status, setStatus] = useState<CoachStatus>("idle");
@@ -48,7 +45,6 @@ export default function VoiceCoach({
   const connectingRef = useRef(false);
   const prevRepRef = useRef(0);
   const prevSetRef = useRef(1);
-  const prevVisionFaultsRef = useRef<string[]>([]);
   const mutableMuted = useRef(muted);
 
   useEffect(() => { mutableMuted.current = muted; }, [muted]);
@@ -119,7 +115,6 @@ export default function VoiceCoach({
 
     if (!conversationRef.current || mutableMuted.current || isPaused) return;
 
-    const faults = visionFaults?.length ? visionFaults.join(", ") : "none";
     const angleInfo =
       currentAngle !== undefined && targetAngle !== undefined
         ? ` | angle: ${Math.round(currentAngle)}deg / target: ${Math.round(targetAngle)}deg`
@@ -131,10 +126,10 @@ export default function VoiceCoach({
       );
     } else {
       conversationRef.current.sendContextualUpdate(
-        `REP COMPLETE | rep: ${currentRep}/${totalReps} | quality: ${lastRepQuality ?? "green"}${angleInfo} | faults: [${faults}]`,
+        `REP COMPLETE | rep: ${currentRep}/${totalReps} | quality: ${lastRepQuality ?? "green"}${angleInfo}`,
       );
     }
-  }, [currentRep, totalReps, currentSet, totalSets, lastRepQuality, currentAngle, targetAngle, visionFaults, isPaused]);
+  }, [currentRep, totalReps, currentSet, totalSets, lastRepQuality, currentAngle, targetAngle, isPaused]);
 
   // ── Push new set start ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -145,19 +140,6 @@ export default function VoiceCoach({
       `SET START | set: ${currentSet}/${totalSets} | exercise: ${exerciseName}`,
     );
   }, [currentSet, totalSets, exerciseName, isPaused]);
-
-  // ── Push vision faults as they arrive ─────────────────────────────────────
-  useEffect(() => {
-    if (!visionFaults?.length) return;
-    const prev = prevVisionFaultsRef.current;
-    const newFaults = visionFaults.filter((f) => !prev.includes(f));
-    prevVisionFaultsRef.current = visionFaults;
-
-    if (!newFaults.length || !conversationRef.current || mutableMuted.current || isPaused) return;
-    conversationRef.current.sendContextualUpdate(
-      `VISION FAULT | severity: high | detected: ${newFaults.join(", ")}`,
-    );
-  }, [visionFaults]);
 
   // ── Mute: stop mic but keep connection alive ───────────────────────────────
   const toggleMute = useCallback(() => {

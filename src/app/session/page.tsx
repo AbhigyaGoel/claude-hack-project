@@ -42,7 +42,7 @@ function WebcamLoading() {
   );
 }
 
-type SessionStep = "loading" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary" | "halted";
+type SessionStep = "loading" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
 
 const STEP_LABELS: Record<SessionStep, string> = {
   loading: "Loading",
@@ -53,16 +53,9 @@ const STEP_LABELS: Record<SessionStep, string> = {
   rest: "Rest Period",
   post_pain: "Post-Session Rating",
   summary: "Session Complete",
-  halted: "Session Halted",
 };
 
 type MovementPhase = "ready" | "lifting" | "holding" | "lowering";
-
-interface NarratorEntry {
-  id: string;
-  text: string;
-  timestamp: number;
-}
 
 export default function SessionPage() {
   const router = useRouter();
@@ -70,7 +63,6 @@ export default function SessionPage() {
   const [useVoiceIntake, setUseVoiceIntake] = useState(true);
   const [liveIntakeRegion, setLiveIntakeRegion] = useState<import("@/types/exercise").BodyRegion | null>(null);
   const [liveIntakeResponses, setLiveIntakeResponses] = useState<Record<string, string>>({});
-  const narratorAbortRef = useRef<AbortController | null>(null);
   const [step, setStep] = useState<SessionStep>("loading");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
@@ -84,157 +76,20 @@ export default function SessionPage() {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [movementPhase, setMovementPhase] = useState<MovementPhase>("ready");
 
-  // Clinical Narrator state
-  const [narratorEntries, setNarratorEntries] = useState<NarratorEntry[]>([]);
-  const [showNarrator, setShowNarrator] = useState(true);
-
-  // Safety Monitor
-  const [haltReason, setHaltReason] = useState<string | null>(null);
-
-  // Vision faults
-  const [visionFaults, setVisionFaults] = useState<string[]>([]);
-
   // Tracking refs
   const sessionStartRef = useRef<number>(0);
   const repQualitiesRef = useRef<RepQuality[][]>([[]]);
   const peakAnglesRef = useRef<Record<string, number>[]>([]);
   const repsPerSetRef = useRef<number[]>([]);
 
-  // Auto rep detection state
+  // Rep detection state
   const peakAngleRef = useRef(0);
   const repPhaseRef = useRef<"idle" | "ascending" | "descending">("idle");
   const repStartTimeRef = useRef(0);
 
-  // Vision sampling
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const lastVisionTime = useRef(0);
-
   const currentExercise = plan?.exercises[currentExerciseIndex];
 
-  // Clinical Narrator — streams reasoning after each rep
-  const streamNarrator = useCallback(async (repContext: Record<string, unknown>) => {
-    if (!activeProfile) return;
-
-    // Abort any prior in-flight narrator stream before starting a new one.
-    narratorAbortRef.current?.abort();
-    const controller = new AbortController();
-    narratorAbortRef.current = controller;
-
-    try {
-      const res = await fetch("/api/narrator", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          session_id: `session_${sessionStartRef.current}`,
-          patient_id: activeProfile.id,
-          ...repContext,
-        }),
-      });
-
-      if (!res.body) return;
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const entryId = `nar_${Date.now()}`;
-
-      while (true) {
-        if (controller.signal.aborted) {
-          await reader.cancel().catch(() => {});
-          return;
-        }
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse SSE events
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.text) {
-                setNarratorEntries((prev) => {
-                  const existing = prev.find((e) => e.id === entryId);
-                  if (existing) {
-                    return prev.map((e) =>
-                      e.id === entryId ? { ...e, text: e.text + data.text } : e
-                    );
-                  }
-                  return [...prev.slice(-9), { id: entryId, text: data.text, timestamp: Date.now() }];
-                });
-              }
-            } catch {
-              // Ignore malformed SSE
-            }
-          }
-        }
-      }
-    } catch {
-      // Narrator failure is non-fatal (includes aborts)
-    }
-  }, [activeProfile]);
-
-  // Vision sampling — 1fps
-  const sendVisionFrame = useCallback(async () => {
-    if (!videoRef.current || !currentExercise) return;
-    const now = Date.now();
-    if (now - lastVisionTime.current < 1000) return;
-    lastVisionTime.current = now;
-
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 384;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(videoRef.current, 0, 0, 512, 384);
-      const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
-
-      // Run form-critic and safety-monitor in parallel
-      const [formRes, safetyRes] = await Promise.all([
-        fetch("/api/form-critic", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            exercise: currentExercise,
-            frame_base64: base64,
-            rep_data: { peak_angle: peakAngleRef.current },
-          }),
-        }).catch(() => null),
-        fetch("/api/safety-monitor", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_id: `session_${sessionStartRef.current}`,
-            frame_base64: base64,
-          }),
-        }).catch(() => null),
-      ]);
-
-      if (formRes) {
-        const formData = await formRes.json();
-        if (formData.faults?.length > 0) {
-          setVisionFaults(formData.faults.map((f: { description?: string; type?: string }) => f.description || f.type || ""));
-        }
-      }
-
-      if (safetyRes) {
-        const safetyData = await safetyRes.json();
-        if (safetyData.halt) {
-          setHaltReason(safetyData.red_flag_type || "Red flag detected");
-          setStep("halted");
-        }
-      }
-    } catch {
-      // Vision is best-effort
-    }
-  }, [currentExercise]);
-
-  // Check for existing active patient on mount. New accounts have zero
-  // patients — drop them straight into intake instead of a redundant
-  // "create a profile" screen (the account IS the profile).
+  // Check for existing active patient on mount.
   useEffect(() => {
     let cancelled = false;
     getActivePatient()
@@ -303,8 +158,6 @@ export default function SessionPage() {
     if (activeProfile) {
       buildPlanFromDiagnostic(result, activeProfile.session_count + 1);
     } else {
-      // New account flow — name the patient after the signed-in user so
-      // the UI shows "@alice" instead of a generic "Patient".
       const me = await getCurrentUser().catch(() => null);
       const patientName = me?.username ? titleCase(me.username) : "Patient";
       const created = await createPatient(patientName, result);
@@ -321,7 +174,6 @@ export default function SessionPage() {
     repQualitiesRef.current = [[]];
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
-    setNarratorEntries([]);
     setStep("exercising");
   }
 
@@ -350,16 +202,6 @@ export default function SessionPage() {
       const prev = peakAnglesRef.current[currentExerciseIndex][key] ?? 0;
       peakAnglesRef.current[currentExerciseIndex][key] = Math.max(prev, peakAngleRef.current);
     }
-
-    // Stream narrator reasoning (non-blocking)
-    streamNarrator({
-      current_exercise: currentExercise.name,
-      rep_number: newRep,
-      set_number: currentSet,
-      peak_angle: peakAngleRef.current,
-      target_angle: targetAngle,
-      quality,
-    });
 
     // Reset
     peakAngleRef.current = 0;
@@ -390,9 +232,6 @@ export default function SessionPage() {
     (_landmarks: Landmark[], angles: Record<string, number>) => {
       if (!currentExercise) return;
 
-      sendVisionFrame();
-
-      // Map exercise's primary joint angle to the correct calculated angle
       const side = diagnostic?.side === "right" ? "right" : "left";
       const primaryJoint = currentExercise.target_angles
         ? Object.keys(currentExercise.target_angles)[0] || "shoulder_flexion_degrees"
@@ -402,13 +241,9 @@ export default function SessionPage() {
       setCurrentAngle(angle);
 
       const targetAngle = Object.values(currentExercise.target_angles)[0];
-      // Start threshold: must move at least 25% of target range to begin tracking
       const startThreshold = Math.max(targetAngle * 0.25, 15);
-      // Reset threshold: must return below 15% of target to complete a rep
       const resetThreshold = Math.max(targetAngle * 0.15, 10);
-      // Peak threshold: must reach at least 50% of target for rep to count
       const peakThreshold = targetAngle * 0.5;
-      // Minimum rep duration: 800ms to filter noise
       const minRepDuration = 800;
 
       const phase = repPhaseRef.current;
@@ -424,7 +259,6 @@ export default function SessionPage() {
         }
       } else if (phase === "ascending") {
         if (angle > peakAngleRef.current) peakAngleRef.current = angle;
-        // Detect peak: angle must drop by at least 12° from peak
         if (angle < peakAngleRef.current - 12) {
           repPhaseRef.current = "descending";
           setMovementPhase("lowering");
@@ -434,7 +268,6 @@ export default function SessionPage() {
       } else if (phase === "descending") {
         if (angle <= resetThreshold) {
           const elapsed = performance.now() - repStartTimeRef.current;
-          // Only count if peak was high enough AND rep took long enough
           if (peakAngleRef.current >= peakThreshold && elapsed >= minRepDuration) {
             completeRep();
           }
@@ -445,7 +278,7 @@ export default function SessionPage() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentExercise, diagnostic, currentRep, currentSet, currentExerciseIndex, plan, sendVisionFrame],
+    [currentExercise, diagnostic, currentRep, currentSet, currentExerciseIndex, plan],
   );
 
   function resumeFromRest() {
@@ -468,7 +301,6 @@ export default function SessionPage() {
     const endedAt = new Date().toISOString();
     const exercisesCompleted = currentExerciseIndex + 1;
 
-    // Flatten per-exercise results into set-level rows.
     const exerciseRows: ExerciseResult[] = [];
     plan.exercises.slice(0, exercisesCompleted).forEach((ex, i) => {
       const qualities = repQualitiesRef.current[i] ?? [];
@@ -476,7 +308,6 @@ export default function SessionPage() {
       const formQuality = qualities.length > 0 ? greenCount / qualities.length : 0;
       const setsCompleted = i < currentExerciseIndex ? ex.sets : currentSet;
 
-      // Preserve the old "one row per set" structure for the DB.
       for (let setNum = 1; setNum <= setsCompleted; setNum++) {
         exerciseRows.push({
           exercise_id: ex.id,
@@ -500,7 +331,6 @@ export default function SessionPage() {
         summary: null,
       });
 
-      // Refresh the cached session_count so Home/Progress pick up the new run.
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });
     } catch {
@@ -508,16 +338,12 @@ export default function SessionPage() {
     }
   }
 
-  // Steps where exiting loses unsaved work — we ask for confirmation.
   const MID_SESSION_STEPS: SessionStep[] = ["exercising", "rest", "post_pain"];
 
   function performExit() {
-    narratorAbortRef.current?.abort();
-    narratorAbortRef.current = null;
     setShowExitConfirm(false);
     // Hard navigation — MediaPipe's WASM loop can stall router.push and
     // the webcam media stream doesn't always release cleanly on soft nav.
-    // A full reload tears everything down in one shot.
     window.location.href = "/";
   }
 
@@ -528,14 +354,6 @@ export default function SessionPage() {
       performExit();
     }
   }
-
-  // On unmount, make sure the narrator SSE stream is released.
-  useEffect(() => {
-    return () => {
-      narratorAbortRef.current?.abort();
-      narratorAbortRef.current = null;
-    };
-  }, []);
 
   return (
     <main className="flex-1 flex flex-col p-4 gap-4" style={{ background: "var(--color-background)" }}>
@@ -552,27 +370,18 @@ export default function SessionPage() {
         </button>
 
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : step === "halted" ? "#ef4444" : "var(--color-accent)" }} />
+          <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : "var(--color-accent)" }} />
           <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{STEP_LABELS[step]}</span>
         </div>
 
         <div className="flex items-center gap-2">
-          {step === "exercising" && (
-            <button
-              onClick={() => setShowNarrator(!showNarrator)}
-              className="text-xs px-2 py-1 rounded"
-              style={{ background: showNarrator ? "var(--color-accent-dim)" : "var(--color-surface-raised)", color: showNarrator ? "var(--color-accent)" : "var(--color-text-muted)", border: "1px solid var(--color-border)" }}
-            >
-              Narrator
-            </button>
-          )}
           {plan && (
             <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>{currentExerciseIndex + 1}/{plan.exercises.length}</span>
           )}
         </div>
       </header>
 
-      {/* Loading — while we figure out if the user has an existing patient */}
+      {/* Loading */}
       {step === "loading" && (
         <div className="flex-1 flex items-center justify-center">
           <div className="spinner" />
@@ -599,7 +408,6 @@ export default function SessionPage() {
       {/* Intake */}
       {step === "intake" && (
         <div className="flex-1 flex gap-4 min-h-0 overflow-y-auto pt-2">
-          {/* Voice panel — left */}
           <div className="w-80 shrink-0">
             <ConversationalIntake
               onComplete={handleIntakeComplete}
@@ -610,8 +418,6 @@ export default function SessionPage() {
               }}
             />
           </div>
-
-          {/* Survey panel — right */}
           <div className="flex-1 min-w-0">
             <IntakeView
               onComplete={handleIntakeComplete}
@@ -629,32 +435,13 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Exercise — main 3-panel layout */}
+      {/* Exercise — 2-panel layout */}
       {step === "exercising" && currentExercise && (
         <div className="flex-1 flex gap-4 min-h-0 animate-fade-in">
-          {/* Clinical Narrator panel (left) */}
-          {showNarrator && (
-            <aside className="w-72 flex flex-col gap-2 overflow-y-auto glass-card p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--color-accent)" }} />
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Reasoning</span>
-              </div>
-              {narratorEntries.length === 0 ? (
-                <p className="text-xs italic" style={{ color: "var(--color-text-muted)" }}>Reasoning will stream here as you exercise...</p>
-              ) : (
-                narratorEntries.map((entry) => (
-                  <div key={entry.id} className="text-xs leading-relaxed p-2 rounded-lg" style={{ background: "var(--color-surface-raised)", color: "var(--color-text-secondary)" }}>
-                    {entry.text}
-                  </div>
-                ))
-              )}
-            </aside>
-          )}
-
           {/* Webcam (center) */}
           <div className="flex-1 min-h-0">
             <Suspense fallback={<WebcamLoading />}>
-              <WebcamView showAngles onLandmarksDetected={handleLandmarks} onVideoReady={(v) => { videoRef.current = v; }} />
+              <WebcamView showAngles onLandmarksDetected={handleLandmarks} />
             </Suspense>
           </div>
 
@@ -675,15 +462,6 @@ export default function SessionPage() {
               targetAngle={Object.values(currentExercise.target_angles)[0]}
               phase={movementPhase}
             />
-            {/* Vision faults */}
-            {visionFaults.length > 0 && (
-              <div className="glass-card p-3" style={{ borderColor: "var(--color-warning)" }}>
-                <div className="text-xs font-medium mb-1" style={{ color: "#eab308" }}>Vision Detection</div>
-                {visionFaults.map((f, i) => (
-                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
-                ))}
-              </div>
-            )}
           </aside>
         </div>
       )}
@@ -708,27 +486,6 @@ export default function SessionPage() {
       {step === "post_pain" && (
         <div className="flex-1 flex items-center justify-center animate-fade-in">
           <PainScale label="How would you rate your pain now?" onSelect={handlePostPain} />
-        </div>
-      )}
-
-      {/* Session Halted — Red Flag */}
-      {step === "halted" && (
-        <div className="flex-1 flex items-center justify-center animate-fade-in">
-          <div className="glass-card-bright p-8 max-w-lg w-full text-center" style={{ borderColor: "#ef4444" }}>
-            <div className="w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ background: "rgba(239,68,68,0.15)" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round">
-                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-              </svg>
-            </div>
-            <h2 className="text-2xl font-semibold mb-3" style={{ color: "#ef4444" }}>Session Halted</h2>
-            <p className="text-sm mb-2" style={{ color: "var(--color-text-primary)" }}>
-              Safety Monitor detected: <strong>{haltReason}</strong>
-            </p>
-            <p className="text-sm mb-6" style={{ color: "var(--color-text-secondary)" }}>
-              This session has been stopped for your safety. Please consult with a licensed physical therapist or healthcare provider before continuing.
-            </p>
-            <Link href="/" className="btn-accent">Return Home</Link>
-          </div>
         </div>
       )}
 
@@ -766,16 +523,6 @@ export default function SessionPage() {
               </div>
             )}
 
-            {/* Narrator summary */}
-            {narratorEntries.length > 0 && (
-              <div className="glass-card p-4 mb-6 text-left">
-                <div className="text-xs font-medium mb-2 uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Notes</div>
-                <div className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
-                  {narratorEntries.slice(-3).map((e) => e.text).join(" ")}
-                </div>
-              </div>
-            )}
-
             <div className="flex gap-3 justify-center">
               <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
               <Link href="/" className="btn-accent">Return Home</Link>
@@ -783,6 +530,7 @@ export default function SessionPage() {
           </div>
         </div>
       )}
+
       {/* VoiceCoach — persisted across exercising/rest to prevent session remount */}
       {currentExercise && (step === "exercising" || step === "rest") && (
         <div
@@ -799,13 +547,12 @@ export default function SessionPage() {
             exerciseName={currentExercise.name}
             currentAngle={currentAngle}
             targetAngle={Object.values(currentExercise.target_angles)[0]}
-            visionFaults={visionFaults}
             isPaused={step === "rest"}
           />
         </div>
       )}
 
-      {/* Exit confirmation — only shown mid-session */}
+      {/* Exit confirmation */}
       {showExitConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in"
