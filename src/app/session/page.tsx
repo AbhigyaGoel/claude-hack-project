@@ -676,21 +676,87 @@ export default function SessionPage() {
       {/* Exercise — 3-panel layout */}
       {step === "exercising" && currentExercise && (
         <div className="flex-1 flex gap-4 min-h-0 animate-fade-in">
-          {/* Clinical Narrator (left) */}
+          {/* Exercise Setlist (left) */}
           <aside className="w-64 flex flex-col gap-2 overflow-y-auto glass-card p-3 shrink-0">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--color-accent)" }} />
-              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Reasoning</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Session Progress</span>
+              <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>
+                {currentExerciseIndex + 1}/{plan?.exercises.length}
+              </span>
             </div>
-            {narratorEntries.length === 0 ? (
-              <p className="text-xs italic" style={{ color: "var(--color-text-muted)" }}>Clinical reasoning will stream here as you exercise...</p>
-            ) : (
-              narratorEntries.map((entry) => (
-                <div key={entry.id} className="text-xs leading-relaxed p-2 rounded-lg" style={{ background: "var(--color-surface-raised)", color: "var(--color-text-secondary)" }}>
-                  {entry.text}
+
+            {/* Overall progress bar */}
+            {plan && (
+              <div className="mb-2">
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--color-surface-raised)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${((currentExerciseIndex + (currentRep / (currentExercise?.reps || 1))) / plan.exercises.length) * 100}%`,
+                      background: "var(--color-accent)",
+                    }}
+                  />
                 </div>
-              ))
+              </div>
             )}
+
+            {/* Exercise list */}
+            <div className="flex flex-col gap-1">
+              {plan?.exercises.map((ex, i) => {
+                const isCurrent = i === currentExerciseIndex;
+                const isDone = i < currentExerciseIndex;
+                const qualities = repQualitiesRef.current[i] ?? [];
+                const greenPct = qualities.length > 0
+                  ? Math.round((qualities.filter(q => q === "green").length / qualities.length) * 100)
+                  : 0;
+
+                return (
+                  <div
+                    key={ex.id}
+                    className="flex items-center gap-2 p-2 rounded-lg transition-colors"
+                    style={{
+                      background: isCurrent ? "var(--color-accent-dim)" : isDone ? "var(--color-surface-raised)" : "transparent",
+                      border: isCurrent ? "1px solid var(--color-accent)" : "1px solid transparent",
+                      opacity: !isCurrent && !isDone ? 0.5 : 1,
+                    }}
+                  >
+                    {/* Status icon */}
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{
+                      background: isDone ? "var(--color-success)" : isCurrent ? "var(--color-accent)" : "var(--color-surface-raised)",
+                    }}>
+                      {isDone ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                      ) : (
+                        <span className="text-[9px] font-mono font-bold" style={{ color: isCurrent ? "white" : "var(--color-text-muted)" }}>{i + 1}</span>
+                      )}
+                    </div>
+
+                    {/* Exercise info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate" style={{ color: isCurrent ? "var(--color-accent)" : isDone ? "var(--color-text-primary)" : "var(--color-text-muted)" }}>
+                        {ex.name}
+                      </div>
+                      <div className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                        {isCurrent ? (
+                          `Set ${currentSet}/${ex.sets} · Rep ${currentRep}/${ex.reps}`
+                        ) : isDone ? (
+                          `Done · ${greenPct}% form`
+                        ) : (
+                          `${ex.sets}×${ex.reps}`
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quality indicator for completed exercises */}
+                    {isDone && (
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{
+                        background: greenPct >= 80 ? "var(--color-success)" : greenPct >= 50 ? "#eab308" : "#ef4444",
+                      }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </aside>
 
           {/* Webcam (center) */}
