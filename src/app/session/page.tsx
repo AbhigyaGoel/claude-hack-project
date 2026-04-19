@@ -288,6 +288,22 @@ export default function SessionPage() {
     setStep("exercising");
   }
 
+  function skipExercise() {
+    if (!plan) return;
+    const nextIndex = currentExerciseIndex + 1;
+    if (nextIndex >= plan.exercises.length) {
+      setStep("post_pain");
+    } else {
+      repQualitiesRef.current[nextIndex] = [];
+      setCurrentExerciseIndex(nextIndex);
+      setCurrentSet(1);
+      setCurrentRep(0);
+      peakAngleRef.current = 0;
+      repPhaseRef.current = "idle";
+      setMovementPhase("ready");
+    }
+  }
+
   async function handlePostPain(value: number) {
     setPainPost(value);
     await persistSession(value);
@@ -462,6 +478,13 @@ export default function SessionPage() {
               targetAngle={Object.values(currentExercise.target_angles)[0]}
               phase={movementPhase}
             />
+            <button
+              onClick={skipExercise}
+              className="btn-ghost text-xs w-full"
+              style={{ opacity: 0.6 }}
+            >
+              Skip Exercise →
+            </button>
           </aside>
         </div>
       )}

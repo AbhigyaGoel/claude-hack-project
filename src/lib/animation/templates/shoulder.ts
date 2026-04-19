@@ -37,29 +37,30 @@ const RIGHT_FOREARM = [16, 18, 20, 22];
  */
 export const overheadReach: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [11, 12, 13, 14, 15, 16],
-  description: "Wall Slide — W to Y",
+  activeJoints: [23, 24, 25, 26],
+  description: "Wall Slide",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
     const p = easeInOutSine(t);
 
-    // Wall slide: arms go from W position (elbows at sides bent 90°) to Y (overhead)
-    // This is abduction in the coronal plane — arms stay in the plane of the body
+    // Wall slide (shoulder mobility): back against wall, arms slide up the wall.
+    // W position (start): elbows out at shoulder height, forearms up — goal post shape
+    // Y position (end): arms extended overhead — Y shape
+    // Body stays still. This is a SHOULDER exercise.
+    //
+    // Using explicit keyframe interpolation — no rotation math.
 
-    // Start position (W): elbows abducted ~80°, bent 90° so forearms point up
-    // End position (Y): arms abducted ~150°, elbows nearly straight
+    // Left arm: W → Y
+    pose[13] = { x: 0.28 + p * 0.04, y: 0.25 - p * 0.13, z: 0, visibility: 1 };  // elbow
+    pose[15] = { x: 0.28 + p * 0.07, y: 0.12 - p * 0.11, z: 0, visibility: 1 };  // wrist
 
-    // Left arm: rotate whole chain to abducted position, then animate further up
-    const lAbduct = -80 - p * 70; // -80° to -150°
-    rotateJointsAround(pose, 11, LEFT_ARM, lAbduct);
-    // Unbend elbow as arms go up (bent 90° in W → straight in Y)
-    const elbowBend = (1 - p) * 80; // 80° bent at start → 0° at end
-    rotateJointsAround(pose, 13, LEFT_FOREARM, elbowBend);
+    // Right arm: W → Y (mirror)
+    pose[14] = { x: 0.72 - p * 0.04, y: 0.25 - p * 0.13, z: 0, visibility: 1 };  // elbow
+    pose[16] = { x: 0.72 - p * 0.07, y: 0.12 - p * 0.11, z: 0, visibility: 1 };  // wrist
 
-    // Right arm: mirror
-    const rAbduct = 80 + p * 70; // 80° to 150°
-    rotateJointsAround(pose, 12, RIGHT_ARM, rAbduct);
-    rotateJointsAround(pose, 14, RIGHT_FOREARM, -elbowBend);
+    // Hands follow wrists
+    for (const i of [17, 19, 21]) pose[i] = { ...pose[15], visibility: 0.3 };
+    for (const i of [18, 20, 22]) pose[i] = { ...pose[16], visibility: 0.3 };
 
     return pose;
   },
