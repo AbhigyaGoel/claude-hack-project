@@ -259,9 +259,16 @@ export default function ReportPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-8 px-4">
-        {/* Spinner lives on its own row, above everything else — clipboard
-            icon removed so the ring reads clearly as a loading indicator. */}
-        <div className="spinner" style={{ width: "72px", height: "72px" }} />
+        {/* Spinner on its own row, centered, above the clipboard icon so
+            the loading ring doesn't fight with the icon for attention. */}
+        <div className="flex flex-col items-center gap-5">
+          <div className="spinner" style={{ width: "64px", height: "64px" }} />
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+            <rect x="9" y="3" width="6" height="4" rx="1" />
+            <path d="M9 12h6M9 16h4" />
+          </svg>
+        </div>
 
         <div className="text-center max-w-xs">
           <p
