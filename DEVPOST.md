@@ -79,8 +79,6 @@ With an 800ms minimum duration filter to reject noise.
 
 - **The Form Observer speaks.** Per-rep, the observer writes a chart note, persists it to the database, AND speaks it aloud via TTS, so the patient gets real-time verbal coaching grounded in what Claude actually sees in the webcam frame.
 
-- **MCP supervision bridge.** A practicing PT can connect via Claude Desktop and review any patient's history, form events, and exercise plan using natural language. The AI handles the session; the human keeps oversight.
-
 ## What we learned
 
 **Agent architecture is about subtraction, not addition.** We started with 10+ agents and ended with 7. The ones we cut (safety monitor, cue generator, vision analyst, progress analyst) were either redundant with better agents or produced more noise than signal. The best architecture is the minimum viable swarm.
@@ -90,6 +88,7 @@ With an 800ms minimum duration filter to reject noise.
 **MediaPipe is good enough.** 33-keypoint BlazePose at 30fps in-browser WASM gives you enough signal for rep counting and basic compensation detection. You don't need depth cameras or server-side pose estimation for rehab-grade analysis. The webcam in your laptop is sufficient.
 
 **Structured prompts with clinical frameworks beat generic instructions.** The SINSS framework, OPQRST interview structure, and body-region-specific skill files gave agents clinically grounded reasoning instead of generic health advice. Domain knowledge in the prompt is worth more than model size.
+
 
 ## What's next for Vero
 
