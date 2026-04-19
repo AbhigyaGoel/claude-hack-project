@@ -206,7 +206,14 @@ export default function SessionPage() {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, stability: 0.6, similarityBoost: 0.8 }),
+        body: JSON.stringify({
+          text,
+          stability: 0.6,
+          similarityBoost: 0.8,
+          // Bump speed so one-line cues land fast without running into the
+          // next rep. Range 0.7–1.2 per ElevenLabs docs.
+          speed: 1.2,
+        }),
       });
       if (!res.ok) {
         logVeroWarn(`tts HTTP ${res.status}`);
@@ -857,10 +864,15 @@ export default function SessionPage() {
       const coachSessionId = sessionIdRef.current ?? result.id;
       logVero(`🎯 Coach: generating plain-language recap (Haiku, session_id=${coachSessionId})...`);
       const t0 = performance.now();
+      // Belt-and-braces: if coach never returns within 20s, abort so the
+      // summary screen can show a fallback instead of spinning forever.
+      const coachAbort = new AbortController();
+      const coachTimeout = setTimeout(() => coachAbort.abort(), 20_000);
       try {
         const coachRes = await fetch("/api/progression-coach", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: coachAbort.signal,
           body: JSON.stringify({
             patient_id: activeProfile.id,
             session_id: coachSessionId,
@@ -876,7 +888,8 @@ export default function SessionPage() {
           );
         } else if (coachData?.coach) {
           setCoachOutput(coachData.coach);
-          logVeroOk(`💬 Coach [${ms}ms]: "${coachData.coach.message}"`);
+          const tag = coachData.fallback ? "fallback" : `${ms}ms`;
+          logVeroOk(`💬 Coach [${tag}]: "${coachData.coach.message}"`);
           setCommentaryEntries((prev) => [
             ...prev.slice(-8),
             {
@@ -890,9 +903,22 @@ export default function SessionPage() {
             `progression-coach returned no coach output (${ms}ms) — check server logs for parse failure`,
             coachData,
           );
+          // Never leave the summary screen stuck on a spinner.
+          setCoachOutput({
+            message: "Nice work today. Rest up and see you next time.",
+            next_steps: [],
+            resources: [],
+          });
         }
       } catch (err) {
         logVeroWarn("progression-coach fetch threw", err);
+        setCoachOutput({
+          message: "Nice work today. Rest up and see you next time.",
+          next_steps: [],
+          resources: [],
+        });
+      } finally {
+        clearTimeout(coachTimeout);
       }
 
       // Coverage summary — what actually made it to Supabase.
@@ -1390,63 +1416,51 @@ export default function SessionPage() {
               phase={movementPhase}
             />
             {commentaryEntries.length > 0 && (
-              <div className="glass-card p-3 flex flex-col gap-2 min-h-0">
-                <div className="flex items-center gap-2 shrink-0">
-                  <div
-                    className="w-2 h-2 rounded-full animate-pulse"
-                    style={{ background: "var(--color-accent)" }}
-                  />
-                  <span
-                    className="text-xs font-medium uppercase tracking-wide"
-                    style={{ color: "var(--color-accent)" }}
-                  >
+              <details className="group" style={{ borderRadius: "0.75rem" }}>
+                <summary
+                  className="flex items-center gap-2 px-3 py-2 cursor-pointer rounded-xl select-none"
+                  style={{
+                    background: "var(--color-surface-raised)",
+                    border: "1px solid var(--color-border)",
+                    listStyle: "none",
+                  }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-accent)", opacity: 0.7 }} />
+                  <span className="text-[11px] font-medium" style={{ color: "var(--color-text-muted)" }}>
                     PT Notes
                   </span>
-                  <span
-                    className="text-[10px] ml-auto"
-                    style={{ color: "var(--color-text-muted)" }}
-                  >
+                  <span className="text-[10px] ml-auto" style={{ color: "var(--color-text-muted)" }}>
                     {commentaryEntries.length}
                   </span>
-                </div>
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="transition-transform group-open:rotate-180" style={{ color: "var(--color-text-muted)" }}>
+                    <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </summary>
                 <div
                   ref={ptNotesScrollRef}
-                  className="flex flex-col gap-2 overflow-y-auto max-h-64 pr-1"
+                  className="flex flex-col gap-1.5 overflow-y-auto max-h-48 mt-1 px-1"
                 >
                   {commentaryEntries.map((entry) => {
-                    const sourceLabel =
-                      entry.source === "observer"
-                        ? "Observer"
-                        : entry.source === "reasoner"
-                          ? "Reasoner"
-                          : "Coach";
                     const sourceColor =
-                      entry.source === "observer"
-                        ? "#38bdc3"
-                        : entry.source === "reasoner"
-                          ? "#8b5cf6"
-                          : "#22c55e";
+                      entry.source === "observer" ? "#38bdc3"
+                      : entry.source === "reasoner" ? "#8b5cf6"
+                      : "#22c55e";
                     return (
                       <div
                         key={entry.id}
-                        className="text-xs leading-relaxed p-2 rounded-lg flex flex-col gap-1 shrink-0"
+                        className="text-[11px] leading-relaxed px-2 py-1.5 rounded-lg"
                         style={{
                           background: "var(--color-surface-raised)",
                           color: "var(--color-text-secondary)",
+                          borderLeft: `2px solid ${sourceColor}`,
                         }}
                       >
-                        <span
-                          className="text-[10px] font-medium uppercase tracking-wide"
-                          style={{ color: sourceColor }}
-                        >
-                          {sourceLabel}
-                        </span>
-                        <span>{entry.text}</span>
+                        {entry.text}
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </details>
             )}
             <button
               onClick={skipExercise}
@@ -1682,13 +1696,13 @@ export default function SessionPage() {
             )}
 
             <div className="flex gap-3 justify-center mt-6 flex-wrap">
-              <Link href="/" className="btn-ghost text-sm">Return Home</Link>
               <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
               {savedSessionId && (
-                <Link href={`/report/${savedSessionId}`} className="btn-accent">
-                  View Full Report
+                <Link href={`/report/${savedSessionId}`} className="btn-ghost text-sm">
+                  Full Report →
                 </Link>
               )}
+              <Link href="/" className="btn-accent">Return Home</Link>
             </div>
           </div>
         </div>
