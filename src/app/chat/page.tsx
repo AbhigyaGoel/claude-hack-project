@@ -115,7 +115,7 @@ export default function ChatPage() {
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
-              className="max-w-[70%] p-3 rounded-2xl text-sm"
+              className="max-w-[70%] p-3 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed"
               style={{
                 background: msg.role === "user" ? "var(--color-accent)" : "var(--color-surface-raised)",
                 color: msg.role === "user" ? "#fff" : "var(--color-text-primary)",
