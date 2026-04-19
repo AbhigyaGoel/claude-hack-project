@@ -148,373 +148,335 @@ interface PriorSession {
   exercises: PriorExercise[];
 }
 
-const PRIOR_SESSIONS: PriorSession[] = [
+/**
+ * Exercise and fault shorthand builders so each session literal stays
+ * readable — 24 sessions in the full literal form would bury the clinical
+ * arcs in punctuation.
+ */
+function ex(
+  id: string,
+  name: string,
+  sets: number,
+  reps: number,
+  form: number,
+  faults?: { fault: string; severity: number; cue?: string }[],
+): PriorExercise {
+  return { id, name, sets, reps, form, faults };
+}
+function f(fault: string, severity: number, cue?: string) {
+  return { fault, severity, cue };
+}
+
+/**
+ * Each region has its own 8-session clinical arc so the progress page can
+ * filter to one pain point and see a coherent trajectory — baseline → flare
+ * → recovery → breakthrough → plateau → consolidation → best. Dates are
+ * spread across ~13 weeks and interleaved across regions, so the global
+ * session list also reads naturally.
+ */
+const KNEE_SESSIONS: PriorSession[] = [
   {
-    daysAgo: 42,
-    durationMin: 18,
-    pain_pre: 7,
-    pain_post: 6,
-    focus: "knee",
-    note: "Baseline — L knee PFPS. Guarded throughout; stopped early on SLR due to quad cramping.",
+    daysAgo: 90, durationMin: 18, pain_pre: 7, pain_post: 6, focus: "knee",
+    note: "Baseline — L knee PFPS. Quad inhibition evident, stair descent painful.",
     exercises: [
-      {
-        id: "quad_set_01",
-        name: "Quad Set",
-        sets: 3,
-        reps: 10,
-        form: 0.58,
-        faults: [
-          { fault: "incomplete_knee_extension", severity: 3, cue: "Push the back of the knee into the floor" },
-          { fault: "quad_inhibition", severity: 3 },
-        ],
-      },
-      {
-        id: "straight_leg_raise_supine_01",
-        name: "Supine Straight Leg Raise",
-        sets: 2,
-        reps: 8,
-        form: 0.52,
-        faults: [
-          { fault: "hip_flexion_compensation", severity: 3, cue: "Lead with the kneecap, not the hip" },
-          { fault: "pelvic_tilt", severity: 2 },
-        ],
-      },
-      {
-        id: "heel_slide_01",
-        name: "Heel Slide",
-        sets: 2,
-        reps: 10,
-        form: 0.61,
-        faults: [{ fault: "limited_rom", severity: 2 }],
-      },
+      ex("quad_set_01", "Quad Set", 3, 10, 0.58, [
+        f("incomplete_knee_extension", 3, "Push the back of the knee into the floor"),
+        f("quad_inhibition", 3),
+      ]),
+      ex("straight_leg_raise_supine_01", "Supine Straight Leg Raise", 2, 8, 0.52, [
+        f("hip_flexion_compensation", 3, "Lead with the kneecap, not the hip"),
+      ]),
+      ex("heel_slide_01", "Heel Slide", 2, 10, 0.61, [f("limited_rom", 2)]),
     ],
   },
   {
-    daysAgo: 37,
-    durationMin: 22,
-    pain_pre: 6,
-    pain_post: 5,
-    focus: "knee",
-    note: "Knee progress. Patient reports new R shoulder pain on overhead reach — added shoulder screen (pendulum, scap retraction) to flag it for next session.",
+    daysAgo: 83, durationMin: 22, pain_pre: 6, pain_post: 5, focus: "knee",
+    note: "Slight tolerance gain. Added wall sit isometric at 60° — held 15s twice.",
     exercises: [
-      {
-        id: "quad_set_01",
-        name: "Quad Set",
-        sets: 3,
-        reps: 12,
-        form: 0.66,
-        faults: [{ fault: "incomplete_knee_extension", severity: 2 }],
-      },
-      {
-        id: "straight_leg_raise_supine_01",
-        name: "Supine Straight Leg Raise",
-        sets: 3,
-        reps: 10,
-        form: 0.63,
-        faults: [{ fault: "hip_flexion_compensation", severity: 2 }],
-      },
-      {
-        id: "pendulum_01",
-        name: "Pendulum (shoulder screen)",
-        sets: 2,
-        reps: 20,
-        form: 0.70,
-        faults: [
-          { fault: "muscular_engagement", severity: 2, cue: "Let the arm hang — gravity does the work" },
-        ],
-      },
-      {
-        id: "scapular_retraction_01",
-        name: "Scapular Retraction",
-        sets: 2,
-        reps: 12,
-        form: 0.64,
-        faults: [
-          { fault: "shoulder_shrug", severity: 3, cue: "Down and back — don't hike the shoulders" },
-          { fault: "neck_tension", severity: 2 },
-        ],
-      },
+      ex("quad_set_01", "Quad Set", 3, 12, 0.66, [f("incomplete_knee_extension", 2)]),
+      ex("straight_leg_raise_supine_01", "Supine Straight Leg Raise", 3, 10, 0.63, [
+        f("hip_flexion_compensation", 2),
+      ]),
+      ex("wall_sit_01", "Wall Sit", 2, 1, 0.58, [
+        f("forward_lean", 3, "Back flat against the wall"),
+        f("knee_valgus", 2, "Knees wide, track over middle toe"),
+      ]),
     ],
   },
   {
-    daysAgo: 32,
-    durationMin: 24,
-    pain_pre: 5,
-    pain_post: 4,
-    focus: "shoulder",
-    note: "Shoulder becomes primary focus — painful arc 80–110° consistent with subacromial impingement. Knee held with minimal load.",
+    daysAgo: 72, durationMin: 14, pain_pre: 8, pain_post: 7, focus: "knee",
+    note: "FLARE after weekend hike. Sharp on stair descent. Pulled back to floor work only.",
     exercises: [
-      {
-        id: "pendulum_01",
-        name: "Pendulum",
-        sets: 3,
-        reps: 20,
-        form: 0.78,
-      },
-      {
-        id: "wall_slide_01",
-        name: "Wall Slide",
-        sets: 3,
-        reps: 10,
-        form: 0.62,
-        faults: [
-          { fault: "lumbar_extension", severity: 3, cue: "Ribs down, low back flat against the wall" },
-          { fault: "shoulder_shrug", severity: 3, cue: "Shoulders down and back" },
-          { fault: "elbow_loss_contact", severity: 2 },
-        ],
-      },
-      {
-        id: "external_rotation_sidelying_01",
-        name: "Sidelying External Rotation",
-        sets: 3,
-        reps: 12,
-        form: 0.66,
-        faults: [
-          { fault: "elbow_drift", severity: 3, cue: "Keep a towel pinned under the elbow" },
-          { fault: "compensation_trunk_rotation", severity: 2 },
-        ],
-      },
-      {
-        id: "quad_set_01",
-        name: "Quad Set (maintenance)",
-        sets: 2,
-        reps: 12,
-        form: 0.72,
-      },
+      ex("quad_set_01", "Quad Set", 2, 10, 0.54, [
+        f("quad_inhibition", 3),
+        f("pain_guarding", 3),
+      ]),
+      ex("heel_slide_01", "Heel Slide", 2, 8, 0.57, [
+        f("limited_rom", 3, "Only go as far as comfortable"),
+      ]),
     ],
   },
   {
-    daysAgo: 27,
-    durationMin: 20,
-    pain_pre: 6,
-    pain_post: 5,
-    focus: "shoulder",
-    note: "Shoulder improving. Knee FLARE after weekend hike — sharp on stair descent. Pulled loaded knee work, kept shoulder block.",
+    daysAgo: 60, durationMin: 20, pain_pre: 6, pain_post: 4, focus: "knee",
+    note: "Recovering from flare. Reintroduced mini-squat. Cue 'knees wide' landed well.",
     exercises: [
-      {
-        id: "pendulum_01",
-        name: "Pendulum",
-        sets: 3,
-        reps: 20,
-        form: 0.82,
-      },
-      {
-        id: "wall_slide_01",
-        name: "Wall Slide",
-        sets: 3,
-        reps: 12,
-        form: 0.71,
-        faults: [{ fault: "lumbar_extension", severity: 2 }],
-      },
-      {
-        id: "prone_y_raise_01",
-        name: "Prone Y Raise",
-        sets: 3,
-        reps: 10,
-        form: 0.65,
-        faults: [
-          { fault: "upper_trap_dominance", severity: 3, cue: "Lead with the thumbs, low traps down and back" },
-          { fault: "neck_extension", severity: 2 },
-        ],
-      },
-      {
-        id: "heel_slide_01",
-        name: "Heel Slide (flare protocol)",
-        sets: 2,
-        reps: 8,
-        form: 0.58,
-        faults: [{ fault: "pain_guarding", severity: 3 }],
-      },
+      ex("quad_set_01", "Quad Set", 3, 12, 0.74),
+      ex("straight_leg_raise_supine_01", "Supine Straight Leg Raise", 3, 10, 0.71),
+      ex("mini_squat_01", "Mini Squat", 3, 10, 0.62, [
+        f("knee_valgus", 3, "Knees track over middle toe"),
+        f("weight_shift_right", 2, "50/50 weight through both feet"),
+        f("shallow_depth", 2),
+      ]),
     ],
   },
   {
-    daysAgo: 22,
-    durationMin: 16,
-    pain_pre: 8,
-    pain_post: 7,
-    focus: "lumbar",
-    note: "NEW lumbar flare after lifting moving boxes. Flexion-intolerant, centralizes with extension. Paused shoulder/knee loading — directional-preference work only.",
+    daysAgo: 48, durationMin: 24, pain_pre: 5, pain_post: 3, focus: "knee",
+    note: "Breakthrough — wall sit held 30s × 3. Stair descent 5 → 3.",
     exercises: [
-      {
-        id: "prone_press_up_01",
-        name: "Prone Press-Up (extension bias)",
-        sets: 3,
-        reps: 10,
-        form: 0.60,
-        faults: [
-          { fault: "incomplete_extension", severity: 2, cue: "Press up from the elbows, hips stay down" },
-          { fault: "glute_engagement", severity: 2, cue: "Let the low back relax into extension" },
-        ],
-      },
-      {
-        id: "pelvic_tilt_supine_01",
-        name: "Supine Pelvic Tilt",
-        sets: 2,
-        reps: 12,
-        form: 0.68,
-      },
-      {
-        id: "cat_cow_01",
-        name: "Cat-Cow",
-        sets: 2,
-        reps: 10,
-        form: 0.72,
-        faults: [{ fault: "cervical_overextension", severity: 2 }],
-      },
+      ex("mini_squat_01", "Mini Squat", 3, 12, 0.76, [f("knee_valgus", 2, "Knees wide")]),
+      ex("wall_sit_01", "Wall Sit", 3, 1, 0.78, [f("forward_lean", 2)]),
+      ex("terminal_knee_extension_01", "Terminal Knee Extension", 3, 15, 0.81),
     ],
   },
   {
-    daysAgo: 15,
-    durationMin: 26,
-    pain_pre: 5,
-    pain_post: 3,
-    focus: "lumbar",
-    note: "Lumbar centralized — pain out of the leg, localized to L4-5. Reintroduced motor control work. Shoulder re-check: painful arc resolved at low loads.",
+    daysAgo: 36, durationMin: 25, pain_pre: 4, pain_post: 3, focus: "knee",
+    note: "Plateau. Observed glute med fatigue driving step-up valgus after rep 6.",
     exercises: [
-      {
-        id: "bird_dog_01",
-        name: "Bird Dog",
-        sets: 3,
-        reps: 10,
-        form: 0.70,
-        faults: [
-          { fault: "lumbar_rotation", severity: 3, cue: "Hips square to the floor — no twist" },
-          { fault: "lumbar_sag", severity: 2, cue: "Long spine, neutral low back" },
-        ],
-      },
-      {
-        id: "dead_bug_01",
-        name: "Dead Bug",
-        sets: 3,
-        reps: 10,
-        form: 0.64,
-        faults: [
-          { fault: "lumbar_extension", severity: 3, cue: "Low back pressed into the floor throughout" },
-          { fault: "breath_holding", severity: 2, cue: "Exhale on the reach" },
-        ],
-      },
-      {
-        id: "mcgill_curl_up_01",
-        name: "McGill Curl-Up",
-        sets: 3,
-        reps: 8,
-        form: 0.66,
-        faults: [{ fault: "neck_flexion", severity: 2, cue: "Head and neck rigid — chin neutral" }],
-      },
-      {
-        id: "wall_slide_01",
-        name: "Wall Slide (shoulder maintenance)",
-        sets: 2,
-        reps: 12,
-        form: 0.80,
-      },
+      ex("mini_squat_01", "Mini Squat", 3, 12, 0.77, [f("weight_shift_right", 2)]),
+      ex("step_up_01", "Step-Up", 3, 10, 0.68, [
+        f("knee_valgus", 3, "Drive through the heel, knee wide"),
+        f("trunk_rotation", 2),
+        f("heel_rise", 2, "Push through the whole foot"),
+      ]),
+      ex("clamshell_knee_01", "Clamshell", 3, 15, 0.82),
     ],
   },
   {
-    daysAgo: 8,
-    durationMin: 28,
-    pain_pre: 3,
-    pain_post: 2,
-    focus: "integrated",
-    note: "First multi-region integrated session — knee loading returns, shoulder control work, lumbar motor control. Form gains across all regions.",
+    daysAgo: 22, durationMin: 27, pain_pre: 3, pain_post: 2, focus: "knee",
+    note: "Added lateral band walk for glute med. Step-up valgus reduced after cue 'knee wide.'",
     exercises: [
-      {
-        id: "mini_squat_01",
-        name: "Mini Squat",
-        sets: 3,
-        reps: 12,
-        form: 0.78,
-        faults: [
-          { fault: "knee_valgus", severity: 2, cue: "Knees wide, track over middle toe" },
-          { fault: "weight_shift_right", severity: 2 },
-        ],
-      },
-      {
-        id: "lateral_band_walk_knee_01",
-        name: "Lateral Band Walk",
-        sets: 3,
-        reps: 12,
-        form: 0.76,
-        faults: [{ fault: "trunk_lean", severity: 2, cue: "Upright torso, hips level" }],
-      },
-      {
-        id: "prone_y_raise_01",
-        name: "Prone Y Raise",
-        sets: 3,
-        reps: 12,
-        form: 0.75,
-        faults: [{ fault: "upper_trap_dominance", severity: 2 }],
-      },
-      {
-        id: "prone_w_raise_01",
-        name: "Prone W Raise",
-        sets: 3,
-        reps: 10,
-        form: 0.70,
-        faults: [
-          { fault: "lumbar_extension", severity: 2, cue: "Forehead resting, low back relaxed" },
-          { fault: "elbow_drop", severity: 2 },
-        ],
-      },
-      {
-        id: "bird_dog_01",
-        name: "Bird Dog",
-        sets: 2,
-        reps: 10,
-        form: 0.82,
-      },
+      ex("step_up_01", "Step-Up", 3, 12, 0.80, [f("knee_valgus", 2)]),
+      ex("lateral_band_walk_knee_01", "Lateral Band Walk", 3, 12, 0.79, [
+        f("trunk_lean", 2, "Upright torso, hips level"),
+      ]),
+      ex("wall_sit_01", "Wall Sit", 3, 1, 0.85),
+      ex("single_leg_squat_01", "Single-Leg Squat (assisted)", 2, 6, 0.63, [
+        f("pelvic_drop", 3, "Keep hips level — don't let the opposite side drop"),
+      ]),
     ],
   },
   {
-    daysAgo: 2,
-    durationMin: 30,
-    pain_pre: 2,
-    pain_post: 1,
-    focus: "integrated",
-    note: "Best session to date. Pain low across all 3 regions. Stair descent 'barely noticeable'; overhead reach pain-free at test loads; lumbar held in extension bias. Ready to test jog tolerance next.",
+    daysAgo: 9, durationMin: 28, pain_pre: 2, pain_post: 1, focus: "knee",
+    note: "Best session to date. Stair descent 'barely noticeable.' Ready to test jog tolerance.",
     exercises: [
-      {
-        id: "step_up_01",
-        name: "Step-Up",
-        sets: 3,
-        reps: 12,
-        form: 0.86,
-        faults: [{ fault: "knee_valgus", severity: 2 }],
-      },
-      {
-        id: "step_down_01",
-        name: "Step-Down (eccentric)",
-        sets: 3,
-        reps: 10,
-        form: 0.74,
-        faults: [{ fault: "rapid_descent", severity: 2, cue: "Three-second lower, control the bottom" }],
-      },
-      {
-        id: "single_leg_squat_01",
-        name: "Single-Leg Squat (assisted)",
-        sets: 2,
-        reps: 6,
-        form: 0.68,
-        faults: [{ fault: "pelvic_drop", severity: 3, cue: "Keep hips level — don't let the opposite side drop" }],
-      },
-      {
-        id: "scapular_push_up_01",
-        name: "Scapular Push-Up",
-        sets: 3,
-        reps: 10,
-        form: 0.78,
-        faults: [{ fault: "elbow_flexion", severity: 2, cue: "Arms straight — move only the shoulder blades" }],
-      },
-      {
-        id: "dead_bug_01",
-        name: "Dead Bug",
-        sets: 3,
-        reps: 10,
-        form: 0.80,
-      },
+      ex("step_up_01", "Step-Up", 3, 12, 0.86),
+      ex("step_down_01", "Step-Down (eccentric)", 3, 10, 0.74, [
+        f("knee_valgus", 2),
+        f("rapid_descent", 2, "Three-second lower, control the bottom"),
+      ]),
+      ex("lateral_band_walk_knee_01", "Lateral Band Walk", 3, 15, 0.84),
+      ex("single_leg_squat_01", "Single-Leg Squat (assisted)", 3, 8, 0.72, [
+        f("pelvic_drop", 2, "Hips level"),
+      ]),
     ],
   },
 ];
+
+const SHOULDER_SESSIONS: PriorSession[] = [
+  {
+    daysAgo: 86, durationMin: 18, pain_pre: 6, pain_post: 5, focus: "shoulder",
+    note: "R shoulder screen. Pain with overhead reach; desk ergonomics + swimming suspected.",
+    exercises: [
+      ex("pendulum_01", "Pendulum", 2, 20, 0.70, [
+        f("muscular_engagement", 2, "Let the arm hang — gravity does the work"),
+      ]),
+      ex("scapular_retraction_01", "Scapular Retraction", 2, 12, 0.64, [
+        f("shoulder_shrug", 3, "Down and back — don't hike the shoulders"),
+        f("neck_tension", 2),
+      ]),
+    ],
+  },
+  {
+    daysAgo: 74, durationMin: 22, pain_pre: 7, pain_post: 6, focus: "shoulder",
+    note: "Painful arc 80–110° confirms subacromial impingement.",
+    exercises: [
+      ex("pendulum_01", "Pendulum", 3, 20, 0.78),
+      ex("scapular_retraction_01", "Scapular Retraction", 3, 12, 0.70),
+      ex("external_rotation_sidelying_01", "Sidelying External Rotation", 2, 10, 0.58, [
+        f("elbow_drift", 3, "Keep a towel pinned under the elbow"),
+        f("compensation_trunk_rotation", 2),
+      ]),
+    ],
+  },
+  {
+    daysAgo: 63, durationMin: 24, pain_pre: 5, pain_post: 4, focus: "shoulder",
+    note: "Tolerating load. Introduced wall slide; lumbar extension compensation requires 'ribs down' cue every set.",
+    exercises: [
+      ex("pendulum_01", "Pendulum", 3, 20, 0.82),
+      ex("wall_slide_01", "Wall Slide", 3, 10, 0.62, [
+        f("lumbar_extension", 3, "Ribs down, low back flat against the wall"),
+        f("shoulder_shrug", 3, "Shoulders down and back"),
+        f("elbow_loss_contact", 2),
+      ]),
+      ex("external_rotation_sidelying_01", "Sidelying External Rotation", 3, 12, 0.66),
+    ],
+  },
+  {
+    daysAgo: 52, durationMin: 24, pain_pre: 5, pain_post: 4, focus: "shoulder",
+    note: "Pendulum clean. Added prone Y raise — upper trap dominance evident.",
+    exercises: [
+      ex("pendulum_01", "Pendulum", 3, 20, 0.85),
+      ex("wall_slide_01", "Wall Slide", 3, 12, 0.71, [f("lumbar_extension", 2)]),
+      ex("prone_y_raise_01", "Prone Y Raise", 3, 10, 0.65, [
+        f("upper_trap_dominance", 3, "Lead with the thumbs, low traps down and back"),
+        f("neck_extension", 2),
+      ]),
+    ],
+  },
+  {
+    daysAgo: 40, durationMin: 25, pain_pre: 4, pain_post: 3, focus: "shoulder",
+    note: "Progress. Wall slide 0.62 → 0.78. Added prone T and ER band at 90°.",
+    exercises: [
+      ex("wall_slide_01", "Wall Slide", 3, 12, 0.78),
+      ex("prone_y_raise_01", "Prone Y Raise", 3, 12, 0.72),
+      ex("prone_t_raise_01", "Prone T Raise", 3, 10, 0.68, [f("upper_trap_dominance", 2)]),
+      ex("external_rotation_band_01", "External Rotation (band)", 3, 12, 0.74, [
+        f("elbow_drift", 2),
+      ]),
+    ],
+  },
+  {
+    daysAgo: 30, durationMin: 26, pain_pre: 4, pain_post: 3, focus: "shoulder",
+    note: "Added prone W raise. Lumbar compensation still present — cue 'forehead resting' every set.",
+    exercises: [
+      ex("wall_slide_01", "Wall Slide", 3, 15, 0.82),
+      ex("prone_w_raise_01", "Prone W Raise", 3, 10, 0.70, [
+        f("lumbar_extension", 2, "Forehead resting, low back relaxed"),
+        f("elbow_drop", 2),
+      ]),
+      ex("external_rotation_band_90_01", "External Rotation (band, 90°)", 3, 12, 0.76),
+    ],
+  },
+  {
+    daysAgo: 18, durationMin: 27, pain_pre: 3, pain_post: 2, focus: "shoulder",
+    note: "Closed-chain introduced. Scapular push-up clean. Overhead reach at low load now pain-free.",
+    exercises: [
+      ex("prone_w_raise_01", "Prone W Raise", 3, 12, 0.78),
+      ex("scapular_push_up_01", "Scapular Push-Up", 3, 10, 0.74, [
+        f("elbow_flexion", 2, "Arms straight — move only the shoulder blades"),
+      ]),
+      ex("shoulder_flexion_supine_01", "Supine Shoulder Flexion", 3, 12, 0.80),
+    ],
+  },
+  {
+    daysAgo: 6, durationMin: 28, pain_pre: 2, pain_post: 1, focus: "shoulder",
+    note: "Best session to date. Full overhead ROM pain-free at light load. Swim stroke review next session.",
+    exercises: [
+      ex("scapular_push_up_01", "Scapular Push-Up", 3, 12, 0.85),
+      ex("prone_y_raise_01", "Prone Y Raise", 3, 15, 0.83),
+      ex("shoulder_er_standing_band_01", "Standing ER (band)", 3, 12, 0.86),
+      ex("wall_angel_01", "Wall Angel", 3, 10, 0.82, [f("forward_head", 2)]),
+    ],
+  },
+];
+
+const LUMBAR_SESSIONS: PriorSession[] = [
+  {
+    daysAgo: 80, durationMin: 14, pain_pre: 8, pain_post: 7, focus: "lumbar",
+    note: "Acute flare after lifting boxes. Flexion-intolerant, centralizes with extension. Directional-preference work only.",
+    exercises: [
+      ex("prone_press_up_01", "Prone Press-Up (extension bias)", 3, 10, 0.60, [
+        f("incomplete_extension", 2, "Press up from the elbows, hips stay down"),
+        f("glute_engagement", 2, "Let the low back relax into extension"),
+      ]),
+      ex("pelvic_tilt_supine_01", "Supine Pelvic Tilt", 2, 12, 0.68),
+    ],
+  },
+  {
+    daysAgo: 67, durationMin: 18, pain_pre: 7, pain_post: 6, focus: "lumbar",
+    note: "Centralizing — pain retreating from R glute to L4-5 only.",
+    exercises: [
+      ex("prone_press_up_01", "Prone Press-Up", 3, 10, 0.68),
+      ex("pelvic_tilt_supine_01", "Supine Pelvic Tilt", 3, 12, 0.74),
+      ex("cat_cow_01", "Cat-Cow", 2, 10, 0.72, [f("cervical_overextension", 2)]),
+    ],
+  },
+  {
+    daysAgo: 58, durationMin: 20, pain_pre: 6, pain_post: 5, focus: "lumbar",
+    note: "Introduced anti-rotation. Bird dog with lumbar rotation — needs 'hips square' cue each set.",
+    exercises: [
+      ex("prone_press_up_01", "Prone Press-Up", 3, 10, 0.75),
+      ex("bird_dog_01", "Bird Dog", 3, 8, 0.62, [
+        f("lumbar_rotation", 3, "Hips square to the floor — no twist"),
+        f("lumbar_sag", 2, "Long spine, neutral low back"),
+      ]),
+      ex("cat_cow_01", "Cat-Cow", 3, 10, 0.78),
+    ],
+  },
+  {
+    daysAgo: 45, durationMin: 22, pain_pre: 5, pain_post: 4, focus: "lumbar",
+    note: "Motor control block. Dead bug anti-extension challenging; breath-holding pattern noted.",
+    exercises: [
+      ex("bird_dog_01", "Bird Dog", 3, 10, 0.70, [f("lumbar_rotation", 2)]),
+      ex("dead_bug_01", "Dead Bug", 3, 10, 0.64, [
+        f("lumbar_extension", 3, "Low back pressed into the floor throughout"),
+        f("breath_holding", 2, "Exhale on the reach"),
+      ]),
+      ex("mcgill_curl_up_01", "McGill Curl-Up", 3, 8, 0.66, [
+        f("neck_flexion", 2, "Head and neck rigid — chin neutral"),
+      ]),
+    ],
+  },
+  {
+    daysAgo: 34, durationMin: 24, pain_pre: 4, pain_post: 3, focus: "lumbar",
+    note: "Plateau — pain stable, form steady. Ready to add loading.",
+    exercises: [
+      ex("bird_dog_01", "Bird Dog", 3, 10, 0.78),
+      ex("dead_bug_01", "Dead Bug", 3, 10, 0.72),
+      ex("mcgill_curl_up_01", "McGill Curl-Up", 3, 10, 0.74),
+    ],
+  },
+  {
+    daysAgo: 25, durationMin: 26, pain_pre: 4, pain_post: 3, focus: "lumbar",
+    note: "Hip hinge prep — lumbar flexion returns under load. Cueing a hinge pattern explicitly.",
+    exercises: [
+      ex("dead_bug_01", "Dead Bug", 3, 12, 0.80),
+      ex("bird_dog_01", "Bird Dog", 3, 12, 0.82),
+      ex("hip_hinge_01", "Hip Hinge", 3, 10, 0.68, [
+        f("lumbar_flexion", 3, "Long spine — hinge at the hips, not the low back"),
+        f("knee_bend", 2),
+      ]),
+      ex("glute_bridge_01", "Glute Bridge", 3, 12, 0.75),
+    ],
+  },
+  {
+    daysAgo: 14, durationMin: 27, pain_pre: 3, pain_post: 2, focus: "lumbar",
+    note: "Integrated loading. Hip hinge form improving; glutes taking over for the low back.",
+    exercises: [
+      ex("hip_hinge_01", "Hip Hinge", 3, 12, 0.78, [f("lumbar_flexion", 2)]),
+      ex("glute_bridge_01", "Glute Bridge", 3, 15, 0.82),
+      ex("bird_dog_01", "Bird Dog", 3, 12, 0.86),
+      ex("dead_bug_01", "Dead Bug", 3, 15, 0.84),
+    ],
+  },
+  {
+    daysAgo: 3, durationMin: 28, pain_pre: 2, pain_post: 1, focus: "lumbar",
+    note: "Best session to date. Pain-free hip hinge at 10 kg test load. Ready for lift-specific work.",
+    exercises: [
+      ex("hip_hinge_01", "Hip Hinge", 3, 15, 0.86),
+      ex("glute_bridge_01", "Glute Bridge", 3, 15, 0.88),
+      ex("dead_bug_01", "Dead Bug", 3, 15, 0.88),
+      ex("mcgill_curl_up_01", "McGill Curl-Up", 3, 12, 0.85),
+    ],
+  },
+];
+
+const PRIOR_SESSIONS: PriorSession[] = [
+  ...KNEE_SESSIONS,
+  ...SHOULDER_SESSIONS,
+  ...LUMBAR_SESSIONS,
+];
+
 
 async function seedPlanAndSessions(): Promise<void> {
   const db = getDb();
