@@ -773,6 +773,19 @@ export default function SessionPage() {
     }
   }
 
+  function goToPrevExercise() {
+    if (currentExerciseIndex <= 0) return;
+    const prevIndex = currentExerciseIndex - 1;
+    repQualitiesRef.current[prevIndex] = [];
+    setCurrentExerciseIndex(prevIndex);
+    setCurrentSet(1);
+    setCurrentRep(0);
+    peakAngleRef.current = 0;
+    repPhaseRef.current = "idle";
+    setMovementPhase("ready");
+    setStep("exercising");
+  }
+
   function loadDemoPreset() {
     setPlan((prev) => ({
       session_number: prev?.session_number ?? 1,
@@ -1395,13 +1408,23 @@ export default function SessionPage() {
                 </div>
               </details>
             )}
-            <button
-              onClick={skipExercise}
-              className="btn-ghost text-xs w-full"
-              style={{ opacity: 0.6 }}
-            >
-              Skip Exercise →
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={goToPrevExercise}
+                disabled={currentExerciseIndex <= 0}
+                className="btn-ghost text-xs flex-1"
+                style={{ opacity: currentExerciseIndex <= 0 ? 0.25 : 0.6 }}
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={skipExercise}
+                className="btn-ghost text-xs flex-1"
+                style={{ opacity: 0.6 }}
+              >
+                Skip →
+              </button>
+            </div>
             {/* Form Critic feedback */}
             {formCriticFaults.length > 0 && (
               <div className="glass-card p-3" style={{ borderColor: "#eab308" }}>
@@ -1429,6 +1452,23 @@ export default function SessionPage() {
                 </p>
               )}
               <button onClick={resumeFromRest} className="btn-accent">Continue Exercise</button>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={goToPrevExercise}
+                  disabled={currentExerciseIndex <= 0}
+                  className="btn-ghost text-xs flex-1"
+                  style={{ opacity: currentExerciseIndex <= 0 ? 0.25 : 0.6 }}
+                >
+                  ← Prev Exercise
+                </button>
+                <button
+                  onClick={skipExercise}
+                  className="btn-ghost text-xs flex-1"
+                  style={{ opacity: 0.6 }}
+                >
+                  Skip Exercise →
+                </button>
+              </div>
             </div>
 
             {/* Clinical Insight — streams in after set completion */}
