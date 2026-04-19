@@ -37,43 +37,59 @@ export default function Home() {
   const [profile, setProfile] = useState<PatientRecord | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [focuses, setFocuses] = useState<FocusEntry[]>([]);
+  // Single loading flag so the page doesn't flash through the
+  // unauthenticated → patient-only → full-picker states while the
+  // individual fetches resolve one-by-one.
+  const [bootstrapping, setBootstrapping] = useState(true);
 
   useEffect(() => {
-    getCurrentUser()
-      .then((u) => setUsername(u?.username ?? null))
-      .catch(() => setUsername(null));
-    getActivePatient()
-      .then(async (p) => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [user, p] = await Promise.all([
+          getCurrentUser().catch(() => null),
+          getActivePatient().catch(() => null),
+        ]);
+        if (cancelled) return;
+        setUsername(user?.username ?? null);
         setProfile(p);
-        if (!p) return;
-        const sessions = await listSessions(p.id).catch(() => [] as SessionRecord[]);
-        const byFocus = new Map<string, FocusEntry>();
-        for (const s of sessions) {
-          const f = (s.summary as { focus?: string } | null)?.focus;
-          if (!f) continue;
-          const existing = byFocus.get(f);
-          if (!existing) {
-            byFocus.set(f, {
-              focus: f,
-              count: 1,
-              lastDate: s.date,
-              lastPainPost: s.pain_post ?? null,
-            });
-          } else {
-            existing.count += 1;
-            if (s.date && (!existing.lastDate || s.date > existing.lastDate)) {
-              existing.lastDate = s.date;
-              existing.lastPainPost = s.pain_post ?? null;
+
+        if (p) {
+          const sessions = await listSessions(p.id).catch(() => [] as SessionRecord[]);
+          if (cancelled) return;
+          const byFocus = new Map<string, FocusEntry>();
+          for (const s of sessions) {
+            const f = (s.summary as { focus?: string } | null)?.focus;
+            if (!f) continue;
+            const existing = byFocus.get(f);
+            if (!existing) {
+              byFocus.set(f, {
+                focus: f,
+                count: 1,
+                lastDate: s.date,
+                lastPainPost: s.pain_post ?? null,
+              });
+            } else {
+              existing.count += 1;
+              if (s.date && (!existing.lastDate || s.date > existing.lastDate)) {
+                existing.lastDate = s.date;
+                existing.lastPainPost = s.pain_post ?? null;
+              }
             }
           }
+          setFocuses(
+            Array.from(byFocus.values()).sort((a, b) =>
+              (b.lastDate ?? "").localeCompare(a.lastDate ?? ""),
+            ),
+          );
         }
-        setFocuses(
-          Array.from(byFocus.values()).sort((a, b) =>
-            (b.lastDate ?? "").localeCompare(a.lastDate ?? ""),
-          ),
-        );
-      })
-      .catch(() => setProfile(null));
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleLogout() {
@@ -153,7 +169,7 @@ export default function Home() {
         </p>
 
         {/* Active profile badge */}
-        {profile && (
+        {!bootstrapping && profile && (
           <div className="mb-8 inline-flex items-center gap-2 px-4 py-2 rounded-full" style={{
             background: "var(--color-surface-raised)",
             border: "1px solid var(--color-border)",
@@ -171,8 +187,13 @@ export default function Home() {
         {/* Pain-point picker — one card per existing focus, plus a "new"
             card that routes the session into a fresh intake. Falls back to
             a single Start Session button when the patient has no history
-            yet. */}
-        {profile && focuses.length > 0 ? (
+            yet. While we're still loading, show a spinner in the CTA slot
+            so the page doesn't flash through intermediate states. */}
+        {bootstrapping ? (
+          <div className="flex justify-center py-4">
+            <div className="spinner" />
+          </div>
+        ) : profile && focuses.length > 0 ? (
           <div className="flex flex-col gap-6">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {focuses.map((f) => {
