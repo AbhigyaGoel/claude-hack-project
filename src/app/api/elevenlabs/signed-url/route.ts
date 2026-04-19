@@ -4,7 +4,7 @@ import { buildAgentPayload } from "@/lib/conversationalIntakeConfig";
 const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
 
 // Bump when voice/prompt config changes
-const INTAKE_CONFIG_VERSION = "v3-brian-turbo";
+const INTAKE_CONFIG_VERSION = "v4-autofill";
 
 /** Module-level cache — survives across requests in the same Node.js process. */
 let cachedAgentId: string | null = null;

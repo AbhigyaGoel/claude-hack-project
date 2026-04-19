@@ -12,6 +12,8 @@ interface IntakeViewProps {
   liveRegion?: BodyRegion | null;
   /** Pre-filled responses from voice conversation — user clicks override */
   liveResponses?: Record<string, string>;
+  /** Suppress TTS narration — set when ConversationalIntake is already speaking */
+  disableTTS?: boolean;
 }
 
 interface Question {
@@ -455,22 +457,41 @@ function SpeakingIndicator() {
   );
 }
 
-export default function IntakeView({ onComplete, liveRegion, liveResponses }: IntakeViewProps) {
+export default function IntakeView({ onComplete, liveRegion, liveResponses, disableTTS = false }: IntakeViewProps) {
   const router = useRouter();
   const [step, setStep] = useState<IntakeStep>("region");
   const [bodyRegion, setBodyRegion] = useState<BodyRegion | null>(null);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [redFlagDetected, setRedFlagDetected] = useState(false);
+  const [voiceAutofilled, setVoiceAutofilled] = useState(false);
 
-  // Sync live region from voice — advance to red_flags step, but only if user hasn't already picked one
+  // Sync live region + responses from voice — smart auto-advance based on what was filled
   useEffect(() => {
-    if (liveRegion && !bodyRegion) {
+    if (!liveRegion || !liveResponses || Object.keys(liveResponses).length === 0) return;
+
+    const allRedFlagsFilled = RED_FLAG_QUESTIONS.every((q) => liveResponses[q.id]);
+
+    if (allRedFlagsFilled && !bodyRegion) {
+      setBodyRegion(liveRegion);
+      setVoiceAutofilled(true);
+
+      const hasRedFlag =
+        liveResponses.numbness === "Yes" ||
+        liveResponses.bowel_bladder === "Yes" ||
+        liveResponses.night_pain === "Yes" ||
+        liveResponses.fever === "Yes" ||
+        liveResponses.weight_loss === "Yes" ||
+        liveResponses.trauma?.startsWith("Yes");
+
+      // All clear — skip straight to assessment; otherwise pause at red_flags for review
+      setStep(hasRedFlag ? "red_flags" : "assessment");
+    } else if (liveRegion && !bodyRegion) {
       setBodyRegion(liveRegion);
       setStep("red_flags");
     }
-  }, [liveRegion, bodyRegion]);
+  }, [liveRegion, liveResponses, bodyRegion]);
 
-  // Sync live responses from voice — user-clicked values always win (prev takes precedence)
+  // Sync live responses — user-clicked values always win (prev takes precedence)
   useEffect(() => {
     if (liveResponses && Object.keys(liveResponses).length > 0) {
       setResponses((prev) => ({ ...liveResponses, ...prev }));
@@ -505,6 +526,7 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
 
   // Speak welcome message on mount
   useEffect(() => {
+    if (disableTTS) return;
     if (!welcomeSpokenRef.current) {
       welcomeSpokenRef.current = true;
       speak(WELCOME_MESSAGE);
@@ -518,6 +540,7 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
 
   // Speak step-transition narration when step changes
   useEffect(() => {
+    if (disableTTS) return;
     if (lastSpokenStepRef.current === step) return;
     lastSpokenStepRef.current = step;
 
@@ -660,6 +683,19 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses }: In
     <div className="glass-card p-6 flex flex-col gap-6 animate-fade-in">
       {/* Speaking indicator */}
       {isSpeaking && <SpeakingIndicator />}
+
+      {/* Voice autofill banner */}
+      {voiceAutofilled && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium"
+          style={{ background: "var(--color-success-dim)", color: "var(--color-success)", border: "1px solid var(--color-success)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Vero pre-filled this from your description — adjust anything that looks off
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="flex items-center gap-2">
