@@ -709,7 +709,7 @@ export default function SessionPage() {
       // Agent 3 — Progression Coach. Fires once, takes the whole session +
       // prior history, produces a plain-language recap for the patient.
       const coachSessionId = sessionIdRef.current ?? result.id;
-      logVero("🎯 Coach: generating plain-language recap (Opus + extended thinking)...");
+      logVero(`🎯 Coach: generating plain-language recap (Haiku, session_id=${coachSessionId})...`);
       const t0 = performance.now();
       try {
         const coachRes = await fetch("/api/progression-coach", {
@@ -721,24 +721,29 @@ export default function SessionPage() {
           }),
         });
         const ms = Math.round(performance.now() - t0);
+        const coachData = await coachRes.json().catch(() => null);
+
         if (!coachRes.ok) {
-          logVeroWarn(`progression-coach ${coachRes.status} after ${ms}ms`);
+          logVeroWarn(
+            `progression-coach HTTP ${coachRes.status} after ${ms}ms`,
+            coachData,
+          );
+        } else if (coachData?.coach) {
+          setCoachOutput(coachData.coach);
+          logVeroOk(`💬 Coach [${ms}ms]: "${coachData.coach.message}"`);
+          setCommentaryEntries((prev) => [
+            ...prev.slice(-8),
+            {
+              id: `coach_${Date.now()}`,
+              text: coachData.coach.message,
+              source: "coach",
+            },
+          ]);
         } else {
-          const coachData = await coachRes.json();
-          if (coachData?.coach) {
-            setCoachOutput(coachData.coach);
-            logVeroOk(`💬 Coach [${ms}ms]: "${coachData.coach.message}"`);
-            setCommentaryEntries((prev) => [
-              ...prev.slice(-8),
-              {
-                id: `coach_${Date.now()}`,
-                text: coachData.coach.message,
-                source: "coach",
-              },
-            ]);
-          } else {
-            logVeroWarn(`progression-coach returned no coach output (${ms}ms)`);
-          }
+          logVeroWarn(
+            `progression-coach returned no coach output (${ms}ms) — check server logs for parse failure`,
+            coachData,
+          );
         }
       } catch (err) {
         logVeroWarn("progression-coach fetch threw", err);

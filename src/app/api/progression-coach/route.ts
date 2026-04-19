@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { callClaude } from "@/lib/claude/client";
+import { callClaudeSimple } from "@/lib/claude/client";
 import { getDb } from "@/db";
 import {
   narratorLog,
@@ -13,9 +13,9 @@ import { loadPatientContext } from "@/lib/claude/memory";
 
 /**
  * Progression Coach — the "P" of SOAP. Fires once at the end of a session.
- * Opus with extended thinking. Looks at the whole workout, prior history,
- * and prior agent commentary, then writes a PLAIN-LANGUAGE recap for the
- * patient. No clinical jargon.
+ * Haiku, text-only. Looks at the whole workout, prior history, and prior
+ * agent commentary, then writes a PLAIN-LANGUAGE recap for the patient.
+ * No clinical jargon.
  *
  * Output shape (JSON):
  *   {
@@ -61,26 +61,36 @@ interface CoachOutput {
 }
 
 function parseCoachOutput(raw: string): CoachOutput | null {
-  const cleaned = raw
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```\s*$/i, "")
+  // Strip any markdown fencing, then try to grab the outermost JSON object
+  // in case Claude wrapped it in prose.
+  const stripped = raw
+    .replace(/```(?:json)?\s*/gi, "")
+    .replace(/```/g, "")
     .trim();
+  const firstBrace = stripped.indexOf("{");
+  const lastBrace = stripped.lastIndexOf("}");
+  if (firstBrace < 0 || lastBrace <= firstBrace) return null;
+  const jsonText = stripped.slice(firstBrace, lastBrace + 1);
+
+  let obj: Partial<CoachOutput>;
   try {
-    const obj = JSON.parse(cleaned) as Partial<CoachOutput>;
-    if (typeof obj.message !== "string") return null;
-    return {
-      message: obj.message,
-      next_steps: Array.isArray(obj.next_steps) ? obj.next_steps.map(String) : [],
-      resources: Array.isArray(obj.resources)
-        ? obj.resources.filter(
-            (r): r is { title: string; description: string } =>
-              !!r && typeof r === "object" && typeof (r as { title?: unknown }).title === "string",
-          )
-        : [],
-    };
+    obj = JSON.parse(jsonText) as Partial<CoachOutput>;
   } catch {
     return null;
   }
+  if (typeof obj.message !== "string" || !obj.message.trim()) return null;
+  return {
+    message: obj.message,
+    next_steps: Array.isArray(obj.next_steps)
+      ? obj.next_steps.map(String).filter((s) => s.trim().length > 0)
+      : [],
+    resources: Array.isArray(obj.resources)
+      ? obj.resources.filter(
+          (r): r is { title: string; description: string } =>
+            !!r && typeof r === "object" && typeof (r as { title?: unknown }).title === "string",
+        )
+      : [],
+  };
 }
 
 function renderForLog(c: CoachOutput): string {
@@ -200,27 +210,35 @@ export async function POST(req: NextRequest) {
     `Write the recap in plain language as specified. Output JSON only.`,
   ].join("\n");
 
+  const t0 = Date.now();
   let raw = "";
   try {
-    const result = await callClaude({
-      model: "claude-opus-4-7",
+    raw = await callClaudeSimple({
+      model: "claude-haiku-4-5-20251001",
       system: SYSTEM_PROMPT,
       systemParts: [SYSTEM_PROMPT, `\n\n# Patient Context\n${patientContext}`],
-      messages: [{ role: "user", content: userPrompt }],
-      tools: [],
-      toolHandlers: {},
-      maxTokens: 1024,
-      thinking: { type: "adaptive", budget_tokens: 4096 },
+      prompt: userPrompt,
+      maxTokens: 800,
     });
-    raw = result.response;
+    console.log(
+      `[progression-coach] Haiku call returned in ${Date.now() - t0}ms (${raw.length} chars)`,
+    );
   } catch (err) {
     console.error("[progression-coach] Claude call failed:", err);
-    return NextResponse.json({ coach: null }, { status: 200 });
+    return NextResponse.json(
+      { coach: null, error: err instanceof Error ? err.message : String(err) },
+      { status: 200 },
+    );
+  }
+
+  if (!raw.trim()) {
+    console.error("[progression-coach] Claude returned empty response");
+    return NextResponse.json({ coach: null, error: "empty response" }, { status: 200 });
   }
 
   const parsed = parseCoachOutput(raw);
   if (!parsed) {
-    console.error("[progression-coach] Unparseable coach output:", raw);
+    console.error("[progression-coach] Unparseable coach output (first 500 chars):", raw.slice(0, 500));
     return NextResponse.json({ coach: null, raw }, { status: 200 });
   }
 
