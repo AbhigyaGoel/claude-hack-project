@@ -1500,7 +1500,29 @@ export default function SessionPage() {
 
       {/* Post-pain */}
       {step === "post_pain" && (
-        <div className="flex-1 flex items-center justify-center animate-fade-in">
+        <div className="flex-1 flex flex-col items-center justify-center animate-fade-in gap-4 p-4">
+          {(reasonerStream || isReasonerStreaming) && (
+            <div className="glass-card p-4 max-w-md w-full" style={{ border: "1px solid rgba(139,92,246,0.3)" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#8b5cf6" }} />
+                <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "#8b5cf6" }}>Clinical Insight</span>
+                {lastSetFormScore !== null && (
+                  <span className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full" style={{
+                    background: lastSetFormScore >= 80 ? "rgba(34,197,94,0.15)" : lastSetFormScore >= 50 ? "rgba(234,179,8,0.15)" : "rgba(239,68,68,0.15)",
+                    color: lastSetFormScore >= 80 ? "#22c55e" : lastSetFormScore >= 50 ? "#eab308" : "#ef4444",
+                  }}>
+                    {lastSetName} · {lastSetFormScore}% form
+                  </span>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+                {reasonerStream}
+                {isReasonerStreaming && (
+                  <span className="inline-block w-1 h-3 ml-0.5 animate-pulse" style={{ background: "#8b5cf6", verticalAlign: "text-bottom" }} />
+                )}
+              </p>
+            </div>
+          )}
           <PainScale label="How would you rate your pain now?" onSelect={handlePostPain} />
         </div>
       )}

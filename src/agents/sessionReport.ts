@@ -6,19 +6,15 @@ import { readMemoryFile, writeMemoryFile } from "@/lib/claude/memory";
 // rely on it. Keeping the prompt here so sessionReport stays self-contained.
 const REPORT_SYSTEM = `You are the Session Report Agent for Vero AI Physical Therapy.
 
-Your role is to synthesize a patient's workout data into a clinically
-useful, empathetic session report — written for the patient to read, with
-enough structure that a human PT can skim it for supervisory review.
+Your role is to synthesize a patient's workout data into a clear, empathetic session report — written for the patient to read directly.
 
 Principles:
-- Reference specific exercises, rep counts, form scores, and pain values
-  from the provided data. Never invent numbers.
-- Lead with progress when it exists; be honest about plateaus or
-  regressions without catastrophizing.
-- Recommendations must be actionable for the next session (e.g. progress,
-  regress, maintain, or refer out if warranted).
-- Output strict JSON matching the schema in the instruction — no prose
-  outside the JSON, no code fences.`;
+- Reference specific exercises, rep counts, form scores, and pain values from the provided data. Never invent numbers.
+- Lead with progress when it exists; be honest about plateaus or regressions without catastrophizing.
+- Write like a knowledgeable friend, not a clinical supervisor. Avoid ALL-CAPS headers, bureaucratic phrasing, and PT-to-PT language.
+- Recommendations must be 1-2 plain sentences each. Actionable, specific, no jargon. Patient reads these — not a supervising PT.
+- You may use light clinical terms (e.g. "chin tuck", "dosage", "form score") but avoid dense medical phrasing like "adverse reaction", "regress intensity", "clinical check-in", "outcome instrument".
+- Output strict JSON matching the schema in the instruction — no prose outside the JSON, no code fences.`;
 
 interface SessionRow {
   id: string;
