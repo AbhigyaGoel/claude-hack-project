@@ -57,11 +57,13 @@ export default function VoiceCoach({
   const prevVisionFaultsRef = useRef<string[]>([]);
   /** Timestamp of last mid-set cue — enforces minimum gap between interruptions */
   const lastMidCueTimeRef = useRef(0);
-  const MID_CUE_COOLDOWN_MS = 10_000;
+  const MID_CUE_COOLDOWN_MS = 7_500;
 
   // Talk mode refs
   const conversationRef = useRef<Conversation | null>(null);
   const connectingRef = useRef(false);
+  /** Synchronous guard — prevents double-fire before modeRef updates via useEffect */
+  const togglingRef = useRef(false);
 
   // Stable ref copies of props used in callbacks that fire as side-effects
   const modeRef = useRef(mode);
@@ -209,7 +211,7 @@ export default function VoiceCoach({
         signedUrl,
         onConnect: () => {
           setTalkStatus("active");
-          conversation.setMicMuted(false); // mic live in talk mode
+          // setMicMuted is called after await resolves to avoid TDZ reference
         },
         onDisconnect: () => {
           conversationRef.current = null;
@@ -226,13 +228,20 @@ export default function VoiceCoach({
 
       conversationRef.current = conversation;
       connectingRef.current = false;
+      togglingRef.current = false;
+      conversation.setMicMuted(false); // mic live in talk mode
       // Give the agent context about the current exercise state
       conversation.sendContextualUpdate(
         `PATIENT PAUSED TO ASK | exercise: ${exerciseName} | rep: ${currentRep}/${totalReps} | set: ${currentSet}/${totalSets} | last quality: ${lastRepQuality ?? "green"}`,
       );
     } catch (err) {
-      console.error("[VoiceCoach] enterTalkMode error:", err);
+      if (err instanceof CloseEvent) {
+        console.error(`[VoiceCoach] WebSocket closed: code=${err.code} reason="${err.reason}" wasClean=${err.wasClean}`);
+      } else {
+        console.error("[VoiceCoach] enterTalkMode error:", err);
+      }
       connectingRef.current = false;
+      togglingRef.current = false;
       setTalkStatus("error");
       setMode("coaching");
     }
@@ -248,8 +257,14 @@ export default function VoiceCoach({
   }, []);
 
   const toggleMode = useCallback(() => {
-    if (modeRef.current === "coaching") enterTalkMode();
-    else exitTalkMode();
+    if (togglingRef.current) return;
+    togglingRef.current = true;
+    if (modeRef.current === "coaching") {
+      enterTalkMode().finally(() => { togglingRef.current = false; });
+    } else {
+      exitTalkMode();
+      togglingRef.current = false;
+    }
   }, [enterTalkMode, exitTalkMode]);
 
   // ── Keyboard shortcut: V to toggle talk mode ──────────────────────────────
