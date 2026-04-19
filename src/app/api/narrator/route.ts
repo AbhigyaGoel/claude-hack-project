@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
               fullText += chunk.content;
               const sseData = JSON.stringify({
                 type: "narrator",
-                content: chunk.content,
+                text: chunk.content,
               });
               controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
             }
