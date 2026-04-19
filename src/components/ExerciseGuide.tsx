@@ -29,7 +29,13 @@ export default function ExerciseGuide({
   return (
     <div className="glass-card p-5 flex flex-col gap-4">
       {/* Exercise demonstration */}
-      <ExerciseDemo exerciseId={exercise.id} />
+      <ExerciseDemo
+        exerciseId={exercise.id}
+        exerciseName={exercise.name}
+        bodyRegion={"body_region" in exercise ? (exercise as Record<string, unknown>).body_region as string : undefined}
+        category={"category" in exercise ? (exercise as Record<string, unknown>).category as string : undefined}
+        targetAngles={exercise.target_angles}
+      />
 
       {/* Live instruction */}
       <div
