@@ -32,7 +32,9 @@ export default function ProgressChart({
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    const margin = { top: 20, right: 20, bottom: 30, left: 40 };
+    // Left margin bumped from 40 → 56 so decimal tick labels (e.g. "0.40")
+    // and the rotated y-axis label stop overlapping.
+    const margin = { top: 20, right: 20, bottom: 30, left: 56 };
     const width = svgRef.current.clientWidth - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
 
@@ -40,15 +42,22 @@ export default function ProgressChart({
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = d3
-      .scaleLinear()
-      .domain([1, Math.max(...data.map((d) => d.session_number))])
-      .range([0, width]);
+    // With one data point, clamp the x domain to a symmetric range so the
+    // dot draws at the center of the plot area instead of the left edge
+    // (d3's default for a degenerate domain is ambiguous and looks empty).
+    const xValues = data.map((d) => d.session_number);
+    const xMin = Math.min(...xValues);
+    const xMax = Math.max(...xValues);
+    const xDomain: [number, number] =
+      xMin === xMax ? [xMin - 0.5, xMax + 0.5] : [xMin, xMax];
 
-    const y = d3
-      .scaleLinear()
-      .domain([0, Math.max(...data.map((d) => d.value)) * 1.1])
-      .range([chartHeight, 0]);
+    const x = d3.scaleLinear().domain(xDomain).range([0, width]);
+
+    // Similarly, give the y-axis headroom when all values are equal (or 0)
+    // so a flat line isn't drawn directly on the top edge.
+    const yMax = Math.max(...data.map((d) => d.value));
+    const yDomain: [number, number] = yMax === 0 ? [0, 1] : [0, yMax * 1.1];
+    const y = d3.scaleLinear().domain(yDomain).range([chartHeight, 0]);
 
     // Grid lines
     g.append("g")
