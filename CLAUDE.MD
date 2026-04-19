@@ -2,7 +2,7 @@
 
 ## What It Is
 
-Vero is a browser-native PT system where specialized Claude agents handle clinical decisions — intake screening, exercise programming, real-time form analysis, coaching cues, and session reporting. MediaPipe provides pose estimation, ElevenLabs provides voice, Tone.js provides adaptive music. Zero server-side CV.
+Vero is a browser-native PT system where specialized Claude agents handle clinical decisions — intake screening, exercise programming, real-time form analysis, coaching cues, and session reporting. MediaPipe provides pose estimation, ElevenLabs provides voice. Zero server-side CV.
 
 ---
 
@@ -12,7 +12,6 @@ Vero is a browser-native PT system where specialized Claude agents handle clinic
 - **Pose:** MediaPipe Tasks Vision (browser WASM), 33-keypoint BlazePose
 - **Claude:** `@anthropic-ai/sdk` — Sonnet 4.6 (form loop, orchestration), Haiku 4.5 (cues, safety), Opus 4.7 (intake, reports)
 - **Voice:** ElevenLabs Conversational AI (intake) + TTS (coaching cues)
-- **Audio:** Tone.js (adaptive music engine with phase-based BPM)
 - **Storage:** Supabase Postgres + Drizzle ORM
 - **Auth:** Supabase Auth (email/password)
 
