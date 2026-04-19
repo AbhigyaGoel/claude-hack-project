@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { drawSkeleton, drawAngleLabel } from "@/lib/skeletonRenderer";
-import { calculateAllAngles } from "@/lib/angleCalculator";
+import { drawSkeleton } from "@/lib/skeletonRenderer";
 import type { Landmark } from "@/types/landmark";
 
 interface ReferencePoseData {
   fps: number;
   exercise_id: string;
   frame_count: number;
-  landmarks: number[][][]; // [frame][landmark][x,y,z,visibility]
+  landmarks: number[][][];
 }
 
 interface ExerciseDemoProps {
@@ -21,19 +20,17 @@ interface ExerciseDemoProps {
 /**
  * Reference pose playback renderer.
  *
- * Loads a pre-recorded MediaPipe keypoint timeseries from
- * /public/reference-poses/{exercise_id}.json and loops it
- * using the same drawSkeleton code as the live user overlay.
+ * Loads a pre-recorded keypoint timeseries from /reference-poses/{id}.json
+ * and loops it using the same drawSkeleton renderer as the live user overlay.
  *
- * Demo and live tracker render identically — same skeleton,
- * same styling, same coordinate system.
+ * Falls back to a clean text-based instruction card when no reference data exists.
  */
 export default function ExerciseDemo({
   exerciseId,
   targetAngles,
-  primaryJointAngle,
 }: ExerciseDemoProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const poseDataRef = useRef<ReferencePoseData | null>(null);
   const frameIndexRef = useRef(0);
   const rafRef = useRef(0);
@@ -41,20 +38,15 @@ export default function ExerciseDemo({
 
   const [status, setStatus] = useState<"loading" | "playing" | "missing">("loading");
 
-  // Convert raw landmark array to Landmark objects
   const toLandmarks = useCallback((raw: number[][]): Landmark[] => {
     return raw.map(([x, y, z, visibility]) => ({
-      // Transform from root-normalized coords back to canvas-relative (0-1)
-      // Root-normalized: hip center at origin, unit torso length
-      // We re-center to canvas: shift origin to center-bottom area
-      x: x * 0.25 + 0.5,    // scale down + center horizontally
-      y: y * 0.25 + 0.55,   // scale down + place in upper-center
+      x: x * 0.28 + 0.5,
+      y: y * 0.28 + 0.5,
       z: z || 0,
       visibility: visibility ?? 1,
     }));
   }, []);
 
-  // Animation loop
   const animate = useCallback(() => {
     const canvas = canvasRef.current;
     const data = poseDataRef.current;
@@ -72,50 +64,34 @@ export default function ExerciseDemo({
       const rawFrame = data.landmarks[frameIndexRef.current];
       const landmarks = toLandmarks(rawFrame);
 
-      // Clear with dark background
-      ctx.fillStyle = "rgba(6, 10, 14, 1)";
+      ctx.fillStyle = "#060a0e";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw skeleton using the same renderer as live pose
       drawSkeleton(ctx, landmarks, canvas.width, canvas.height);
 
-      // Show primary joint angle if target angles provided
-      if (targetAngles && primaryJointAngle) {
-        const angles = calculateAllAngles(landmarks);
-        const angleKey = primaryJointAngle.includes("shoulder")
-          ? "left_shoulder_flexion"
-          : primaryJointAngle.includes("knee")
-            ? "left_knee_flexion"
-            : primaryJointAngle.includes("hip")
-              ? "left_hip_flexion"
-              : "left_shoulder_flexion";
+      // "DEMO" badge
+      ctx.font = "bold 10px system-ui";
+      ctx.fillStyle = "rgba(56, 189, 195, 0.7)";
+      ctx.fillText("DEMO", 8, 16);
 
-        const currentAngle = angles[angleKey] || 0;
-        if (currentAngle > 5) {
-          // Find the joint landmark to label
-          const jointIndex = angleKey.includes("shoulder") ? 11
-            : angleKey.includes("knee") ? 25
-              : angleKey.includes("hip") ? 23 : 11;
-
-          if (landmarks[jointIndex]) {
-            drawAngleLabel(ctx, landmarks[jointIndex], currentAngle, canvas.width, canvas.height);
-          }
+      // Target angle readout
+      if (targetAngles) {
+        const primaryKey = Object.keys(targetAngles)[0];
+        const targetVal = targetAngles[primaryKey];
+        if (primaryKey && targetVal) {
+          const label = primaryKey.replace(/_/g, " ").replace(" degrees", "°").replace(" cm", " cm");
+          ctx.font = "11px system-ui";
+          ctx.fillStyle = "rgba(255,255,255,0.5)";
+          ctx.fillText(`Target: ${label} ${targetVal}`, 8, canvas.height - 8);
         }
       }
 
-      // Draw "DEMO" badge
-      ctx.font = "bold 10px system-ui";
-      ctx.fillStyle = "rgba(56, 189, 195, 0.8)";
-      ctx.fillText("DEMO", 8, 16);
-
-      // Advance frame (loop)
       frameIndexRef.current = (frameIndexRef.current + 1) % data.frame_count;
     }
 
     rafRef.current = requestAnimationFrame(animate);
-  }, [toLandmarks, targetAngles, primaryJointAngle]);
+  }, [toLandmarks, targetAngles]);
 
-  // Load reference pose data
   useEffect(() => {
     let cancelled = false;
 
@@ -126,15 +102,11 @@ export default function ExerciseDemo({
           setStatus("missing");
           return;
         }
-
         const data: ReferencePoseData = await res.json();
-        if (cancelled) return;
-
-        if (!data.landmarks || data.landmarks.length === 0) {
-          setStatus("missing");
+        if (cancelled || !data.landmarks?.length) {
+          if (!cancelled) setStatus("missing");
           return;
         }
-
         poseDataRef.current = data;
         frameIndexRef.current = 0;
         lastFrameTimeRef.current = 0;
@@ -148,63 +120,73 @@ export default function ExerciseDemo({
     return () => { cancelled = true; };
   }, [exerciseId]);
 
-  // Start/stop animation loop
   useEffect(() => {
-    if (status === "playing") {
-      rafRef.current = requestAnimationFrame(animate);
-    }
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [status, animate]);
+    if (status !== "playing") return;
 
-  // Set canvas size
-  useEffect(() => {
+    // Size canvas for container
     const canvas = canvasRef.current;
-    if (canvas) {
-      // Match the container size at 2x for retina
+    const container = containerRef.current;
+    if (canvas && container) {
       const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+      const w = container.clientWidth;
+      const h = 180;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
       const ctx = canvas.getContext("2d");
       if (ctx) ctx.scale(dpr, dpr);
     }
-  }, [status]);
 
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [status, animate]);
+
+  // "Demo coming soon" — clean instructional fallback
   if (status === "missing") {
+    const targetKey = targetAngles ? Object.keys(targetAngles)[0] : null;
+    const targetVal = targetKey ? targetAngles?.[targetKey] : null;
+
     return (
       <div
-        className="flex flex-col items-center justify-center rounded-xl gap-2"
+        className="rounded-xl flex flex-col items-center justify-center gap-3 py-6 px-4"
         style={{
           background: "var(--color-surface-raised)",
           border: "1px solid var(--color-border)",
-          padding: "16px",
-          minHeight: 160,
+          minHeight: 140,
         }}
       >
-        <svg viewBox="0 0 40 40" width={28} height={28}>
-          <circle cx="20" cy="12" r="5" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5" />
-          <line x1="20" y1="17" x2="20" y2="28" stroke="var(--color-text-muted)" strokeWidth="1.5" />
-          <line x1="20" y1="21" x2="13" y2="26" stroke="var(--color-text-muted)" strokeWidth="1.5" />
-          <line x1="20" y1="21" x2="27" y2="26" stroke="var(--color-text-muted)" strokeWidth="1.5" />
-          <line x1="20" y1="28" x2="14" y2="36" stroke="var(--color-text-muted)" strokeWidth="1.5" />
-          <line x1="20" y1="28" x2="26" y2="36" stroke="var(--color-text-muted)" strokeWidth="1.5" />
-        </svg>
-        <span className="text-[10px] leading-tight text-center" style={{ color: "var(--color-text-muted)" }}>
-          Demo coming soon
-        </span>
+        <div className="flex items-center gap-2">
+          <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round">
+            <circle cx="12" cy="5" r="3" />
+            <path d="M12 8v8M8 12h8M12 16l-3 5M12 16l3 5" />
+          </svg>
+          <span className="text-xs font-medium" style={{ color: "var(--color-accent)" }}>
+            Follow the cues below
+          </span>
+        </div>
+        {targetVal && targetKey && (
+          <div className="text-center">
+            <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              Target: {targetKey.replace(/_/g, " ").replace("degrees", "").trim()}
+            </span>
+            <span className="text-sm font-mono font-semibold ml-1" style={{ color: "var(--color-accent)" }}>
+              {targetVal}{targetKey.includes("cm") ? " cm" : "°"}
+            </span>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div
+      ref={containerRef}
       className="relative rounded-xl overflow-hidden"
       style={{
         background: "#060a0e",
         border: "1px solid var(--color-border)",
-        minHeight: 160,
+        minHeight: 180,
       }}
     >
       {status === "loading" && (
@@ -212,11 +194,7 @@ export default function ExerciseDemo({
           <div className="spinner" style={{ width: 20, height: 20 }} />
         </div>
       )}
-      <canvas
-        ref={canvasRef}
-        className="w-full"
-        style={{ height: 160, display: "block" }}
-      />
+      <canvas ref={canvasRef} style={{ display: "block" }} />
     </div>
   );
 }

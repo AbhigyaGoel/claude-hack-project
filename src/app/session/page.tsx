@@ -15,6 +15,7 @@ import type { RepQuality } from "@/types/assessment";
 import type { Landmark } from "@/types/landmark";
 import type { StoredProfile, StoredSession, StoredExerciseResult } from "@/types/storage";
 import { queryExercises } from "@/lib/exercises";
+import { mapExerciseAngleKey } from "@/lib/angleCalculator";
 import {
   getActiveProfile,
   setActiveProfileId,
@@ -400,8 +401,12 @@ export default function SessionPage() {
 
       sendVisionFrame();
 
+      // Map exercise's primary joint angle to the correct calculated angle
       const side = diagnostic?.side === "right" ? "right" : "left";
-      const angleKey = `${side}_shoulder_flexion`;
+      const primaryJoint = currentExercise.target_angles
+        ? Object.keys(currentExercise.target_angles)[0] || "shoulder_flexion_degrees"
+        : "shoulder_flexion_degrees";
+      const angleKey = mapExerciseAngleKey(primaryJoint, side);
       const angle = angles[angleKey] || 0;
       setCurrentAngle(angle);
 
