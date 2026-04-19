@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { getActivePatient } from "@/lib/api";
 import type { PatientRecord } from "@/types/storage";
 
@@ -123,7 +125,29 @@ export default function ChatPage() {
                 borderBottomLeftRadius: msg.role === "assistant" ? "4px" : undefined,
               }}
             >
-              {msg.content}
+              {msg.role === "assistant" ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                    strong: ({ children }) => <strong className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    h1: ({ children }) => <h1 className="text-base font-semibold mb-1 mt-2">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-sm font-semibold mb-1 mt-2">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-2">{children}</h3>,
+                    code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs font-mono" style={{ background: "var(--color-surface)", color: "var(--color-accent)" }}>{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="border-l-2 pl-3 my-1 italic" style={{ borderColor: "var(--color-accent)", color: "var(--color-text-secondary)" }}>{children}</blockquote>,
+                    hr: () => <hr className="my-2" style={{ borderColor: "var(--color-border)" }} />,
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              ) : (
+                msg.content
+              )}
             </div>
           </div>
         ))}
