@@ -77,11 +77,16 @@ export default function Home() {
           <Link href="/progress" className="btn-ghost text-base">
             View Progress
           </Link>
+          {profile && (
+            <Link href="/chat" className="btn-ghost text-base">
+              Chat
+            </Link>
+          )}
         </div>
 
         {/* Feature pills */}
         <div className="flex gap-3 justify-center mt-16 flex-wrap">
-          {["MediaPipe Pose", "AI Form Analysis", "Voice Coaching", "Adaptive Music"].map((feature) => (
+          {["Multi-Agent Swarm", "Clinical Narrator", "Safety Monitor", "MediaPipe Pose", "Voice Coaching", "Adaptive Music"].map((feature) => (
             <span
               key={feature}
               className="text-xs font-medium px-3 py-1.5 rounded-full"

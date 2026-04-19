@@ -35,7 +35,7 @@ function WebcamLoading() {
   );
 }
 
-type SessionStep = "profile" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary";
+type SessionStep = "profile" | "returning" | "intake" | "pre_pain" | "exercising" | "rest" | "post_pain" | "summary" | "halted";
 
 const STEP_LABELS: Record<SessionStep, string> = {
   profile: "Select Profile",
@@ -46,9 +46,16 @@ const STEP_LABELS: Record<SessionStep, string> = {
   rest: "Rest Period",
   post_pain: "Post-Session Rating",
   summary: "Session Complete",
+  halted: "Session Halted",
 };
 
 type MovementPhase = "ready" | "lifting" | "holding" | "lowering";
+
+interface NarratorEntry {
+  id: string;
+  text: string;
+  timestamp: number;
+}
 
 export default function SessionPage() {
   const [step, setStep] = useState<SessionStep>("profile");
@@ -64,31 +71,115 @@ export default function SessionPage() {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [movementPhase, setMovementPhase] = useState<MovementPhase>("ready");
 
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [visionFaults, setVisionFaults] = useState<string[]>([]);
-  const [halted, setHalted] = useState(false);
+  // Clinical Narrator state
+  const [narratorEntries, setNarratorEntries] = useState<NarratorEntry[]>([]);
+  const [showNarrator, setShowNarrator] = useState(true);
 
-  // Tracking refs for persistence
+  // Safety Monitor
+  const [haltReason, setHaltReason] = useState<string | null>(null);
+
+  // Vision faults
+  const [visionFaults, setVisionFaults] = useState<string[]>([]);
+
+  // Tracking refs
   const sessionStartRef = useRef<number>(0);
-  const repQualitiesRef = useRef<RepQuality[][]>([[]]); // grouped by exercise index
-  const peakAnglesRef = useRef<Record<string, number>[]>([]); // per exercise
-  const repsPerSetRef = useRef<number[]>([]); // reps completed per set
+  const repQualitiesRef = useRef<RepQuality[][]>([[]]);
+  const peakAnglesRef = useRef<Record<string, number>[]>([]);
+  const repsPerSetRef = useRef<number[]>([]);
 
   // Auto rep detection state
   const peakAngleRef = useRef(0);
   const repPhaseRef = useRef<"idle" | "ascending" | "descending">("idle");
   const repStartTimeRef = useRef(0);
 
-  const currentExercise = plan?.exercises[currentExerciseIndex];
-
-  // Vision sampling — 1fps webcam frame analysis
+  // Vision sampling
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastVisionTime = useRef(0);
 
+  const currentExercise = plan?.exercises[currentExerciseIndex];
+
+  // Safety Monitor — runs in parallel, checks every rep
+  const checkSafetyMonitor = useCallback(async (context: { transcript?: string }) => {
+    try {
+      const res = await fetch("/api/safety-monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: `session_${sessionStartRef.current}`,
+          ...context,
+        }),
+      });
+      const data = await res.json();
+      if (data.halt) {
+        setHaltReason(data.red_flag_type || "Red flag detected");
+        setStep("halted");
+        return true;
+      }
+    } catch {
+      // Safety monitor failure is non-fatal
+    }
+    return false;
+  }, []);
+
+  // Clinical Narrator — streams reasoning after each rep
+  const streamNarrator = useCallback(async (repContext: Record<string, unknown>) => {
+    if (!activeProfile) return;
+    try {
+      const res = await fetch("/api/narrator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: `session_${sessionStartRef.current}`,
+          patient_id: activeProfile.id,
+          ...repContext,
+        }),
+      });
+
+      if (!res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const entryId = `nar_${Date.now()}`;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.text) {
+                setNarratorEntries((prev) => {
+                  const existing = prev.find((e) => e.id === entryId);
+                  if (existing) {
+                    return prev.map((e) =>
+                      e.id === entryId ? { ...e, text: e.text + data.text } : e
+                    );
+                  }
+                  return [...prev.slice(-9), { id: entryId, text: data.text, timestamp: Date.now() }];
+                });
+              }
+            } catch {
+              // Ignore malformed SSE
+            }
+          }
+        }
+      }
+    } catch {
+      // Narrator failure is non-fatal
+    }
+  }, [activeProfile]);
+
+  // Vision sampling — 1fps
   const sendVisionFrame = useCallback(async () => {
-    if (!videoRef.current || !currentExercise || halted) return;
+    if (!videoRef.current || !currentExercise) return;
     const now = Date.now();
-    if (now - lastVisionTime.current < 1000) return; // 1fps cap
+    if (now - lastVisionTime.current < 1000) return;
     lastVisionTime.current = now;
 
     try {
@@ -100,29 +191,45 @@ export default function SessionPage() {
       ctx.drawImage(videoRef.current, 0, 0, 512, 384);
       const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
 
-      const res = await fetch("/api/vision", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          frame_base64: base64,
-          exercise_context: currentExercise.name,
-        }),
-      });
-      const data = await res.json();
+      // Run form-critic and safety-monitor in parallel
+      const [formRes, safetyRes] = await Promise.all([
+        fetch("/api/form-critic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            exercise: currentExercise,
+            frame_base64: base64,
+            rep_data: { peak_angle: peakAngleRef.current },
+          }),
+        }).catch(() => null),
+        fetch("/api/safety-monitor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: `session_${sessionStartRef.current}`,
+            frame_base64: base64,
+          }),
+        }).catch(() => null),
+      ]);
 
-      if (data.faults && data.faults.length > 0) {
-        setVisionFaults(data.faults.map((f: { description: string }) => f.description));
+      if (formRes) {
+        const formData = await formRes.json();
+        if (formData.faults?.length > 0) {
+          setVisionFaults(formData.faults.map((f: { description?: string; type?: string }) => f.description || f.type || ""));
+        }
       }
 
-      // Severity 5 = halt session
-      if (data.overall_severity >= 5) {
-        setHalted(true);
-        setStep("post_pain");
+      if (safetyRes) {
+        const safetyData = await safetyRes.json();
+        if (safetyData.halt) {
+          setHaltReason(safetyData.red_flag_type || "Red flag detected");
+          setStep("halted");
+        }
       }
     } catch {
-      // Vision is best-effort, don't break the session
+      // Vision is best-effort
     }
-  }, [currentExercise, halted]);
+  }, [currentExercise]);
 
   // Check for existing active profile on mount
   useEffect(() => {
@@ -185,21 +292,15 @@ export default function SessionPage() {
   function handleIntakeComplete(result: DiagnosticResult) {
     setDiagnostic(result);
     if (result.cleared_for_exercise) {
-      // Update or create profile with diagnostic
       if (activeProfile) {
-        const updated: StoredProfile = {
-          ...activeProfile,
-          diagnostic: result,
-          updated_at: new Date().toISOString(),
-        };
+        const updated: StoredProfile = { ...activeProfile, diagnostic: result, updated_at: new Date().toISOString() };
         saveProfile(updated);
         setActiveProfile(updated);
         buildPlanFromDiagnostic(result, updated.session_count + 1);
       } else {
-        // No profile — create one from intake
         const newProfile: StoredProfile = {
           id: `profile_${Date.now()}`,
-          name: `Patient`,
+          name: "Patient",
           diagnostic: result,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -220,6 +321,7 @@ export default function SessionPage() {
     repQualitiesRef.current = [[]];
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
+    setNarratorEntries([]);
     setStep("exercising");
   }
 
@@ -229,7 +331,6 @@ export default function SessionPage() {
     const newRep = currentRep + 1;
     setCurrentRep(newRep);
 
-    // Determine quality
     const targetAngle = Object.values(currentExercise.target_angles)[0];
     const tolerance = Object.values(currentExercise.tolerances)[0] || 10;
     const deficit = Math.abs(peakAngleRef.current - targetAngle);
@@ -241,7 +342,6 @@ export default function SessionPage() {
     exerciseQualities.push(quality);
     repQualitiesRef.current[currentExerciseIndex] = exerciseQualities;
 
-    // Track peak angle for this exercise
     if (!peakAnglesRef.current[currentExerciseIndex]) {
       peakAnglesRef.current[currentExerciseIndex] = {};
     }
@@ -251,19 +351,27 @@ export default function SessionPage() {
       peakAnglesRef.current[currentExerciseIndex][key] = Math.max(prev, peakAngleRef.current);
     }
 
-    // Reset for next rep
+    // Stream narrator reasoning (non-blocking)
+    streamNarrator({
+      current_exercise: currentExercise.name,
+      rep_number: newRep,
+      set_number: currentSet,
+      peak_angle: peakAngleRef.current,
+      target_angle: targetAngle,
+      quality,
+    });
+
+    // Reset
     peakAngleRef.current = 0;
     repPhaseRef.current = "idle";
 
     if (newRep >= currentExercise.reps) {
       repsPerSetRef.current.push(newRep);
-
       if (currentSet >= currentExercise.sets) {
         const nextIndex = currentExerciseIndex + 1;
         if (nextIndex >= (plan?.exercises.length ?? 0)) {
           setStep("post_pain");
         } else {
-          // Initialize tracking for next exercise
           repQualitiesRef.current[nextIndex] = [];
           setCurrentExerciseIndex(nextIndex);
           setCurrentSet(1);
@@ -282,7 +390,6 @@ export default function SessionPage() {
     (_landmarks: Landmark[], angles: Record<string, number>) => {
       if (!currentExercise) return;
 
-      // Trigger vision sampling (1fps, non-blocking)
       sendVisionFrame();
 
       const side = diagnostic?.side === "right" ? "right" : "left";
@@ -293,7 +400,6 @@ export default function SessionPage() {
       const targetAngle = Object.values(currentExercise.target_angles)[0];
       const threshold = targetAngle * 0.3;
       const peakThreshold = targetAngle * 0.7;
-
       const phase = repPhaseRef.current;
 
       if (phase === "idle") {
@@ -306,9 +412,7 @@ export default function SessionPage() {
           setMovementPhase("ready");
         }
       } else if (phase === "ascending") {
-        if (angle > peakAngleRef.current) {
-          peakAngleRef.current = angle;
-        }
+        if (angle > peakAngleRef.current) peakAngleRef.current = angle;
         if (angle < peakAngleRef.current - 8) {
           repPhaseRef.current = "descending";
           setMovementPhase("lowering");
@@ -317,16 +421,14 @@ export default function SessionPage() {
         }
       } else if (phase === "descending") {
         if (angle <= threshold) {
-          if (peakAngleRef.current >= peakThreshold) {
-            completeRep();
-          }
+          if (peakAngleRef.current >= peakThreshold) completeRep();
           repPhaseRef.current = "idle";
           setMovementPhase("ready");
         }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentExercise, diagnostic, currentRep, currentSet, currentExerciseIndex, plan],
+    [currentExercise, diagnostic, currentRep, currentSet, currentExerciseIndex, plan, sendVisionFrame],
   );
 
   function resumeFromRest() {
@@ -354,7 +456,6 @@ export default function SessionPage() {
         const qualities = repQualitiesRef.current[i] ?? [];
         const greenCount = qualities.filter((q) => q === "green").length;
         const formQuality = qualities.length > 0 ? Math.round((greenCount / qualities.length) * 100) : 0;
-
         return {
           exercise_id: ex.id,
           exercise_name: ex.name,
@@ -374,7 +475,6 @@ export default function SessionPage() {
     const totalQualities = repQualitiesRef.current.flat();
     const totalGreen = totalQualities.filter((q) => q === "green").length;
     const avgFormQuality = totalQualities.length > 0 ? Math.round((totalGreen / totalQualities.length) * 100) : 0;
-
     const existingSessions = getSessionsForProfile(activeProfile.id);
 
     const session: StoredSession = {
@@ -397,39 +497,36 @@ export default function SessionPage() {
     <main className="flex-1 flex flex-col p-4 gap-4" style={{ background: "var(--color-background)" }}>
       {/* Header */}
       <header className="flex items-center justify-between px-2">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-sm font-medium transition-colors duration-200"
-          style={{ color: "var(--color-text-muted)" }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
+        <Link href="/" className="flex items-center gap-2 text-sm font-medium transition-colors duration-200" style={{ color: "var(--color-text-muted)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Exit
         </Link>
 
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : "var(--color-accent)" }} />
-          <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
-            {STEP_LABELS[step]}
-          </span>
+          <div className="w-2 h-2 rounded-full" style={{ background: step === "exercising" ? "var(--color-success)" : step === "halted" ? "#ef4444" : "var(--color-accent)" }} />
+          <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{STEP_LABELS[step]}</span>
         </div>
 
-        {plan && (
-          <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>
-            {currentExerciseIndex + 1}/{plan.exercises.length}
-          </span>
-        )}
-        {!plan && <div className="w-12" />}
+        <div className="flex items-center gap-2">
+          {step === "exercising" && (
+            <button
+              onClick={() => setShowNarrator(!showNarrator)}
+              className="text-xs px-2 py-1 rounded"
+              style={{ background: showNarrator ? "var(--color-accent-dim)" : "var(--color-surface-raised)", color: showNarrator ? "var(--color-accent)" : "var(--color-text-muted)", border: "1px solid var(--color-border)" }}
+            >
+              Narrator
+            </button>
+          )}
+          {plan && (
+            <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>{currentExerciseIndex + 1}/{plan.exercises.length}</span>
+          )}
+        </div>
       </header>
 
       {/* Profile Selection */}
       {step === "profile" && (
         <div className="flex-1 flex items-center justify-center animate-fade-in">
-          <ProfileSelector
-            onSelect={handleProfileSelect}
-            onCreateNew={handleNewIntake}
-          />
+          <ProfileSelector onSelect={handleProfileSelect} onCreateNew={handleNewIntake} />
         </div>
       )}
 
@@ -437,22 +534,12 @@ export default function SessionPage() {
       {step === "returning" && activeProfile && (
         <div className="flex-1 flex items-center justify-center animate-fade-in">
           <div className="glass-card-bright p-8 max-w-md text-center">
-            <h2 className="text-xl font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
-              Welcome back, {activeProfile.name}
-            </h2>
-            <p className="text-sm mb-1" style={{ color: "var(--color-text-secondary)" }}>
-              {activeProfile.diagnostic.body_region} program
-            </p>
-            <p className="text-xs mb-6" style={{ color: "var(--color-text-muted)" }}>
-              {activeProfile.session_count} session{activeProfile.session_count !== 1 ? "s" : ""} completed
-            </p>
+            <h2 className="text-xl font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>Welcome back, {activeProfile.name}</h2>
+            <p className="text-sm mb-1" style={{ color: "var(--color-text-secondary)" }}>{activeProfile.diagnostic.body_region} program</p>
+            <p className="text-xs mb-6" style={{ color: "var(--color-text-muted)" }}>{activeProfile.session_count} session{activeProfile.session_count !== 1 ? "s" : ""} completed</p>
             <div className="flex gap-3 justify-center">
-              <button onClick={handleContinueAsReturning} className="btn-accent">
-                Continue Program
-              </button>
-              <button onClick={handleNewIntake} className="btn-ghost text-sm">
-                New Assessment
-              </button>
+              <button onClick={handleContinueAsReturning} className="btn-accent">Continue Program</button>
+              <button onClick={handleNewIntake} className="btn-ghost text-sm">New Assessment</button>
             </div>
           </div>
         </div>
@@ -461,9 +548,7 @@ export default function SessionPage() {
       {/* Intake */}
       {step === "intake" && (
         <div className="flex-1 flex items-start justify-center pt-4 overflow-y-auto">
-          <div className="w-full max-w-2xl">
-            <IntakeView onComplete={handleIntakeComplete} />
-          </div>
+          <div className="w-full max-w-2xl"><IntakeView onComplete={handleIntakeComplete} /></div>
         </div>
       )}
 
@@ -474,14 +559,36 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Exercise */}
+      {/* Exercise — main 3-panel layout */}
       {step === "exercising" && currentExercise && (
         <div className="flex-1 flex gap-4 min-h-0 animate-fade-in">
+          {/* Clinical Narrator panel (left) */}
+          {showNarrator && (
+            <aside className="w-72 flex flex-col gap-2 overflow-y-auto glass-card p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--color-accent)" }} />
+                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Reasoning</span>
+              </div>
+              {narratorEntries.length === 0 ? (
+                <p className="text-xs italic" style={{ color: "var(--color-text-muted)" }}>Reasoning will stream here as you exercise...</p>
+              ) : (
+                narratorEntries.map((entry) => (
+                  <div key={entry.id} className="text-xs leading-relaxed p-2 rounded-lg" style={{ background: "var(--color-surface-raised)", color: "var(--color-text-secondary)" }}>
+                    {entry.text}
+                  </div>
+                ))
+              )}
+            </aside>
+          )}
+
+          {/* Webcam (center) */}
           <div className="flex-1 min-h-0">
             <Suspense fallback={<WebcamLoading />}>
               <WebcamView showAngles onLandmarksDetected={handleLandmarks} onVideoReady={(v) => { videoRef.current = v; }} />
             </Suspense>
           </div>
+
+          {/* Controls sidebar (right) */}
           <aside className="w-80 flex flex-col gap-3 overflow-y-auto">
             <VoiceCoach
               currentRep={currentRep}
@@ -510,9 +617,7 @@ export default function SessionPage() {
             {/* Vision faults */}
             {visionFaults.length > 0 && (
               <div className="glass-card p-3" style={{ borderColor: "var(--color-warning)" }}>
-                <div className="text-xs font-medium mb-1" style={{ color: "var(--color-warning)" }}>
-                  Vision Detection
-                </div>
+                <div className="text-xs font-medium mb-1" style={{ color: "#eab308" }}>Vision Detection</div>
                 {visionFaults.map((f, i) => (
                   <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{f}</div>
                 ))}
@@ -526,20 +631,14 @@ export default function SessionPage() {
       {step === "rest" && (
         <div className="flex-1 flex items-center justify-center animate-fade-in">
           <div className="glass-card-bright p-12 text-center max-w-md">
-            <div className="text-6xl font-light font-mono mb-2" style={{ color: "var(--color-accent)" }}>
-              Rest
-            </div>
-            <p className="text-sm mb-3" style={{ color: "var(--color-text-muted)" }}>
-              Take a 60-second break before the next set
-            </p>
+            <div className="text-6xl font-light font-mono mb-2" style={{ color: "var(--color-accent)" }}>Rest</div>
+            <p className="text-sm mb-3" style={{ color: "var(--color-text-muted)" }}>Take a 60-second break before the next set</p>
             {plan && currentExerciseIndex < plan.exercises.length && (
               <p className="text-sm mb-6" style={{ color: "var(--color-text-secondary)" }}>
                 Next: <span style={{ color: "var(--color-accent)" }}>{plan.exercises[currentExerciseIndex]?.name}</span>
               </p>
             )}
-            <button onClick={resumeFromRest} className="btn-accent">
-              Continue Exercise
-            </button>
+            <button onClick={resumeFromRest} className="btn-accent">Continue Exercise</button>
           </div>
         </div>
       )}
@@ -551,32 +650,44 @@ export default function SessionPage() {
         </div>
       )}
 
+      {/* Session Halted — Red Flag */}
+      {step === "halted" && (
+        <div className="flex-1 flex items-center justify-center animate-fade-in">
+          <div className="glass-card-bright p-8 max-w-lg w-full text-center" style={{ borderColor: "#ef4444" }}>
+            <div className="w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ background: "rgba(239,68,68,0.15)" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+            </div>
+            <h2 className="text-2xl font-semibold mb-3" style={{ color: "#ef4444" }}>Session Halted</h2>
+            <p className="text-sm mb-2" style={{ color: "var(--color-text-primary)" }}>
+              Safety Monitor detected: <strong>{haltReason}</strong>
+            </p>
+            <p className="text-sm mb-6" style={{ color: "var(--color-text-secondary)" }}>
+              This session has been stopped for your safety. Please consult with a licensed physical therapist or healthcare provider before continuing.
+            </p>
+            <Link href="/" className="btn-accent">Return Home</Link>
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       {step === "summary" && (
         <div className="flex-1 flex items-center justify-center animate-fade-in">
           <div className="glass-card-bright p-8 max-w-lg w-full text-center">
             <div className="w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ background: "var(--color-success-dim)" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round">
-                <path d="M20 6L9 17l-5-5"/>
-              </svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
             </div>
-
-            <h2 className="text-2xl font-semibold mb-6" style={{ color: "var(--color-text-primary)" }}>
-              Session Complete
-            </h2>
+            <h2 className="text-2xl font-semibold mb-6" style={{ color: "var(--color-text-primary)" }}>Session Complete</h2>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="p-4 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
-                <div className="text-3xl font-semibold font-mono" style={{ color: "var(--color-accent)" }}>
-                  {plan?.exercises.length}
-                </div>
+                <div className="text-3xl font-semibold font-mono" style={{ color: "var(--color-accent)" }}>{plan?.exercises.length}</div>
                 <div className="data-label mt-1">Exercises</div>
               </div>
               <div className="p-4 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
                 <div className="text-3xl font-semibold font-mono" style={{
-                  color: painPre !== null && painPost !== null && painPre > painPost
-                    ? "var(--color-success)"
-                    : "var(--color-text-primary)"
+                  color: painPre !== null && painPost !== null && painPre > painPost ? "var(--color-success)" : "var(--color-text-primary)"
                 }}>
                   {painPre !== null && painPost !== null
                     ? (painPre - painPost > 0 ? `-${painPre - painPost}` : painPre - painPost === 0 ? "0" : `+${painPost - painPre}`)
@@ -588,27 +699,25 @@ export default function SessionPage() {
 
             {painPre !== null && painPost !== null && (
               <div className="flex items-center justify-center gap-6 mb-6 text-sm">
-                <div>
-                  <span className="data-label mr-1.5">Before</span>
-                  <span className="font-mono" style={{ color: "var(--color-text-primary)" }}>{painPre}/10</span>
-                </div>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-                <div>
-                  <span className="data-label mr-1.5">After</span>
-                  <span className="font-mono" style={{ color: "var(--color-text-primary)" }}>{painPost}/10</span>
+                <div><span className="data-label mr-1.5">Before</span><span className="font-mono" style={{ color: "var(--color-text-primary)" }}>{painPre}/10</span></div>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                <div><span className="data-label mr-1.5">After</span><span className="font-mono" style={{ color: "var(--color-text-primary)" }}>{painPost}/10</span></div>
+              </div>
+            )}
+
+            {/* Narrator summary */}
+            {narratorEntries.length > 0 && (
+              <div className="glass-card p-4 mb-6 text-left">
+                <div className="text-xs font-medium mb-2 uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Clinical Notes</div>
+                <div className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+                  {narratorEntries.slice(-3).map((e) => e.text).join(" ")}
                 </div>
               </div>
             )}
 
             <div className="flex gap-3 justify-center">
-              <Link href="/progress" className="btn-ghost text-sm">
-                View Progress
-              </Link>
-              <Link href="/" className="btn-accent">
-                Return Home
-              </Link>
+              <Link href="/progress" className="btn-ghost text-sm">View Progress</Link>
+              <Link href="/" className="btn-accent">Return Home</Link>
             </div>
           </div>
         </div>

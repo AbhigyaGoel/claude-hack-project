@@ -208,6 +208,7 @@ export async function POST(req: NextRequest) {
       name: patientName || "Patient",
       diagnostic: diagnosticResult,
     }),
+    memory_path: `/patient-memory/${patientId}`,
     created_at: new Date().toISOString(),
   });
 

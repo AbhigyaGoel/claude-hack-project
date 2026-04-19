@@ -1,14 +1,45 @@
 import { NextRequest } from "next/server";
-import { callClaude } from "@/lib/claude/client";
-import { getTools } from "@/lib/claude/tools";
-import { FORM_ANALYSIS_SYSTEM, COACHING_SYSTEM } from "@/lib/claude/prompts";
+import { callClaudeSimple, callClaudeVision, streamClaude } from "@/lib/claude/client";
+import {
+  FORM_CRITIC_SYSTEM,
+  SAFETY_MONITOR_SYSTEM,
+  NARRATOR_SYSTEM,
+  CUE_GENERATOR_SYSTEM,
+} from "@/lib/claude/prompts";
+import { loadPatientContext } from "@/lib/claude/memory";
 import { getDb } from "@/db";
-import { sessions, sets, formEvents, redFlags } from "@/db/schema";
+import { sessions, sets, repAnalyses, redFlags, narratorLog } from "@/db/schema";
 import { eq } from "drizzle-orm";
+
+function generateId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+interface SSEEvent {
+  type: "assessment" | "cue" | "narrator" | "halt" | "status" | "error" | "done";
+  data: unknown;
+}
+
+function formatSSE(event: SSEEvent): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+function parseJSON<T>(raw: string, fallback: T): T {
+  const cleaned = raw
+    .replace(/```json\s*/g, "")
+    .replace(/```/g, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 /**
  * SSE streaming orchestrator — the main real-time loop.
- * Client sends rep data, orchestrator evaluates form + generates coaching.
+ * Spawns form-critic, safety-monitor, and narrator as parallel calls.
+ * Uses prompt caching for session-long cached prefix.
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -16,195 +47,419 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
-  switch (action) {
-    case "start_session": {
-      const { plan_id, patient_id, pain_pre } = data;
-      const id = session_id || `session_${Date.now()}`;
+  // Non-streaming actions return JSON directly
+  if (action === "start_session") {
+    return handleStartSession(db, session_id, data);
+  }
 
-      await db.insert(sessions).values({
-        id,
-        plan_id,
-        patient_id,
-        started_at: new Date().toISOString(),
-        pain_pre,
-      });
+  if (action === "end_session") {
+    return handleEndSession(db, session_id, data);
+  }
 
-      return Response.json({ session_id: id, status: "started" });
-    }
+  if (action === "halt_session") {
+    return handleHaltSession(db, session_id, data);
+  }
 
-    case "evaluate_rep": {
-      const { exercise, rep_data, rep_number, set_number } = data;
+  if (action === "evaluate_rep") {
+    return handleEvaluateRep(db, session_id, data);
+  }
 
-      // Form analysis via Claude
-      let assessment;
+  return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });
+}
+
+async function handleStartSession(
+  db: ReturnType<typeof getDb>,
+  sessionId: string | undefined,
+  data: Record<string, unknown>,
+) {
+  const { plan_id, patient_id, pain_pre } = data as {
+    plan_id: string;
+    patient_id: string;
+    pain_pre?: number;
+  };
+
+  const id = sessionId ?? `session_${Date.now()}`;
+
+  await db.insert(sessions).values({
+    id,
+    plan_id,
+    patient_id,
+    started_at: new Date().toISOString(),
+    pain_pre: pain_pre ?? null,
+  });
+
+  return Response.json({
+    type: "status",
+    data: { session_id: id, status: "started" },
+  });
+}
+
+async function handleEndSession(
+  db: ReturnType<typeof getDb>,
+  sessionId: string,
+  data: Record<string, unknown>,
+) {
+  const { pain_post } = data as { pain_post?: number };
+
+  await db
+    .update(sessions)
+    .set({
+      ended_at: new Date().toISOString(),
+      pain_post: pain_post ?? null,
+    })
+    .where(eq(sessions.id, sessionId));
+
+  return Response.json({
+    type: "status",
+    data: { session_id: sessionId, status: "ended" },
+  });
+}
+
+async function handleHaltSession(
+  db: ReturnType<typeof getDb>,
+  sessionId: string,
+  data: Record<string, unknown>,
+) {
+  const { reason, red_flag_type } = data as {
+    reason?: string;
+    red_flag_type?: string;
+  };
+
+  // Record the halt
+  await db.insert(redFlags).values({
+    id: generateId("rf"),
+    session_id: sessionId,
+    type: red_flag_type ?? "manual_halt",
+    transcript: reason ?? null,
+    halted: true,
+    referred: true,
+  });
+
+  // End the session
+  await db
+    .update(sessions)
+    .set({ ended_at: new Date().toISOString() })
+    .where(eq(sessions.id, sessionId));
+
+  return Response.json({
+    type: "halt",
+    data: {
+      session_id: sessionId,
+      status: "halted",
+      reason: reason ?? "Session halted",
+    },
+  });
+}
+
+async function handleEvaluateRep(
+  db: ReturnType<typeof getDb>,
+  sessionId: string,
+  data: Record<string, unknown>,
+) {
+  const {
+    exercise,
+    rep_data,
+    keypoints_timeseries,
+    frame_base64,
+    rep_number,
+    set_number,
+    patient_id,
+  } = data as {
+    exercise: {
+      id: string;
+      name: string;
+      target_angles?: Record<string, number>;
+      tolerances?: Record<string, number>;
+      compensation_patterns?: string[];
+    };
+    rep_data: Record<string, unknown>;
+    keypoints_timeseries?: unknown[];
+    frame_base64?: string;
+    rep_number: number;
+    set_number: number;
+    patient_id?: string;
+  };
+
+  const encoder = new TextEncoder();
+  const sessionStartMs = Date.now();
+
+  // Build cached system parts for the session context
+  const patientContext = patient_id ? loadPatientContext(patient_id) : "";
+  const sessionContext = JSON.stringify({
+    session_id: sessionId,
+    exercise_name: exercise.name,
+    rep_number,
+    set_number,
+  });
+
+  const formCriticPrompt = JSON.stringify({
+    exercise_name: exercise.name,
+    exercise_id: exercise.id,
+    target_angles: exercise.target_angles ?? {},
+    tolerances: exercise.tolerances ?? {},
+    compensation_patterns: exercise.compensation_patterns ?? [],
+    rep_data,
+    keypoints_timeseries: keypoints_timeseries ?? [],
+  });
+
+  const safetyPrompt = JSON.stringify({
+    session_id: sessionId,
+    keypoints: keypoints_timeseries ? keypoints_timeseries[keypoints_timeseries.length - 1] : null,
+    timestamp: new Date().toISOString(),
+  });
+
+  const readableStream = new ReadableStream({
+    async start(controller) {
       try {
-        const result = await callClaude({
-          model: "claude-sonnet-4-6-20250514",
-          system: FORM_ANALYSIS_SYSTEM,
-          messages: [
-            {
-              role: "user",
-              content: JSON.stringify({
-                exercise_name: exercise.name,
-                target_angles: exercise.target_angles,
-                tolerances: exercise.tolerances,
-                compensation_patterns: exercise.compensation_patterns,
-                rep_data,
-              }),
-            },
-          ],
-          tools: getTools("log_rep", "speak", "regress_exercise", "flag_red_flag"),
-          toolHandlers: {
-            log_rep: async (input) => {
-              const setId = `set_${session_id}_${exercise.id}_${set_number}`;
-              // Upsert set record
-              try {
-                await db.insert(sets).values({
-                  id: setId,
-                  session_id,
-                  exercise_id: exercise.id,
-                  exercise_name: exercise.name,
-                  set_number,
-                  reps: rep_number,
-                  form_score: input.quality === "green" ? 1.0 : input.quality === "yellow" ? 0.5 : 0.0,
-                });
-              } catch {
-                // Set already exists, update rep count
-              }
+        controller.enqueue(encoder.encode(formatSSE({
+          type: "status",
+          data: { message: "Evaluating rep...", rep_number, set_number },
+        })));
 
-              // Log form event if faults detected
-              if (input.faults && (input.faults as string[]).length > 0) {
-                for (const fault of input.faults as string[]) {
-                  await db.insert(formEvents).values({
-                    id: `fe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                    set_id: setId,
-                    t_ms: Date.now(),
-                    fault,
-                    severity: input.quality === "red" ? 4 : 2,
-                    cue_sent: null,
-                  });
-                }
-              }
-              return { logged: true };
-            },
-            speak: async (input) => ({ queued: true, text: input.text }),
-            regress_exercise: async (input) => ({
-              regressed: true,
-              exercise_id: input.exercise_id,
-              reason: input.reason,
-            }),
-            flag_red_flag: async (input) => {
-              await db.insert(redFlags).values({
-                id: `rf_${Date.now()}`,
-                session_id,
-                type: input.type as string,
-                transcript: (input.transcript as string) || null,
-                referred: true,
-              });
-              return { halted: true, type: input.type };
-            },
-          },
-          maxTokens: 2048,
-        });
+        // Spawn form-critic and safety-monitor in parallel
+        const [formResult, safetyResult] = await Promise.all([
+          runFormCritic(formCriticPrompt, frame_base64),
+          runSafetyMonitor(safetyPrompt, frame_base64),
+        ]);
 
-        try {
-          assessment = JSON.parse(result.response);
-        } catch {
-          assessment = { rep_quality: "yellow", severity: 2 };
-        }
-      } catch {
-        // Fallback to local evaluation
-        const targetAngle = Object.values(exercise.target_angles as Record<string, number>)[0] ?? 90;
-        const tolerance = Object.values(exercise.tolerances as Record<string, number>)[0] ?? 10;
-        const peakAngle = rep_data.peak_angle ?? 0;
-        const deficit = Math.abs(peakAngle - targetAngle);
-        assessment = {
-          rep_quality: deficit <= tolerance ? "green" : deficit <= tolerance * 2 ? "yellow" : "red",
-          severity: deficit <= tolerance ? 1 : deficit <= tolerance * 2 ? 3 : 4,
-        };
-      }
-
-      // Generate coaching cue
-      let coachingCue = null;
-      if (assessment.severity >= 3) {
-        try {
-          const coachResult = await callClaude({
-            model: "claude-sonnet-4-6-20250514",
-            system: COACHING_SYSTEM,
-            messages: [
-              {
-                role: "user",
-                content: JSON.stringify({
-                  assessment,
-                  rep_number,
-                  set_number,
-                  exercise_name: exercise.name,
-                }),
-              },
-            ],
-            tools: getTools("speak"),
-            toolHandlers: {
-              speak: async (input) => input,
-            },
-            maxTokens: 512,
+        // Check safety first — if halt, stop immediately
+        if (safetyResult.halt) {
+          // Write red flag to DB
+          await db.insert(redFlags).values({
+            id: generateId("rf"),
+            session_id: sessionId,
+            type: safetyResult.red_flag_type ?? "unknown",
+            transcript: null,
+            halted: true,
+            referred: safetyResult.severity >= 4,
           });
 
-          try {
-            coachingCue = JSON.parse(coachResult.response);
-          } catch {
-            coachingCue = coachResult.toolResults[0] ?? null;
-          }
-        } catch {
-          // No coaching cue
+          controller.enqueue(encoder.encode(formatSSE({
+            type: "halt",
+            data: safetyResult,
+          })));
+          controller.enqueue(encoder.encode(formatSSE({ type: "done", data: null })));
+          controller.close();
+          return;
         }
-      }
 
-      return Response.json({
-        assessment,
-        coaching_cue: coachingCue,
-        tool_results: [],
-      });
-    }
+        // Send assessment
+        controller.enqueue(encoder.encode(formatSSE({
+          type: "assessment",
+          data: formResult,
+        })));
 
-    case "end_session": {
-      const { pain_post } = data;
+        // Log rep analysis
+        const setId = `set_${sessionId}_${exercise.id}_${set_number}`;
+        try {
+          await db.insert(sets).values({
+            id: setId,
+            session_id: sessionId,
+            exercise_id: exercise.id,
+            exercise_name: exercise.name,
+            set_number,
+            reps: rep_number,
+            form_score: formResult.quality,
+          });
+        } catch {
+          // Set already exists — that's fine
+        }
 
-      await db
-        .update(sessions)
-        .set({
-          ended_at: new Date().toISOString(),
-          pain_post,
-        })
-        .where(eq(sessions.id, session_id));
-
-      return Response.json({ status: "ended" });
-    }
-
-    case "vision_check": {
-      // Proxy to vision endpoint (keeps the orchestrator as single entry point)
-      const { frame_base64, keypoints_json, exercise_context } = data;
-
-      try {
-        const { callClaudeVision } = await import("@/lib/claude/client");
-        const { VISION_SYSTEM } = await import("@/lib/claude/prompts");
-
-        const response = await callClaudeVision({
-          system: VISION_SYSTEM,
-          imageBase64: frame_base64,
-          prompt: `Analyze this exercise frame. Exercise: ${exercise_context || "unknown"}. Keypoints: ${keypoints_json || "none"}. Respond with JSON: { faults, overall_severity, recommendation }`,
+        await db.insert(repAnalyses).values({
+          id: generateId("ra"),
+          set_id: setId,
+          rep_num: rep_number,
+          video_clip_url: null,
+          faults_json: JSON.stringify(formResult.faults),
+          quality: formResult.quality,
         });
 
-        try {
-          return Response.json(JSON.parse(response.replace(/```json\s*/g, "").replace(/```/g, "").trim()));
-        } catch {
-          return Response.json({ faults: [], overall_severity: 1, recommendation: "" });
+        // Generate cue if faults detected or quality is low
+        const needsCue = formResult.quality < 0.8 || (formResult.faults && formResult.faults.length > 0);
+        if (needsCue) {
+          const cue = await runCueGenerator(formResult, rep_number, set_number, exercise.name);
+          controller.enqueue(encoder.encode(formatSSE({
+            type: "cue",
+            data: cue,
+          })));
         }
-      } catch {
-        return Response.json({ faults: [], overall_severity: 1, recommendation: "Vision unavailable" });
-      }
-    }
 
-    default:
-      return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });
+        // Stream narrator reasoning (non-blocking)
+        if (patient_id) {
+          const narratorSystemParts = [
+            NARRATOR_SYSTEM,
+            `\n\n## Patient Context\n${patientContext}`,
+            `\n\n## Session Context\n${sessionContext}`,
+          ];
+
+          const narratorPrompt = JSON.stringify({
+            session_id: sessionId,
+            current_exercise: exercise.name,
+            rep_data,
+            assessment: formResult,
+            safety_check: { severity: safetyResult.severity },
+          });
+
+          let narratorFullText = "";
+
+          try {
+            const narratorStream = streamClaude({
+              model: "claude-opus-4-7-20250219",
+              system: NARRATOR_SYSTEM,
+              systemParts: narratorSystemParts,
+              messages: [
+                {
+                  role: "user",
+                  content: `Clinical reasoning narration:\n${narratorPrompt}`,
+                },
+              ],
+              maxTokens: 1024,
+              thinking: { type: "enabled", budget_tokens: 4096 },
+            });
+
+            for await (const chunk of narratorStream) {
+              if (chunk.type === "text") {
+                narratorFullText += chunk.content;
+                controller.enqueue(encoder.encode(formatSSE({
+                  type: "narrator",
+                  data: { content: chunk.content },
+                })));
+              }
+            }
+
+            // Log narrator output
+            if (narratorFullText.length > 0) {
+              await db.insert(narratorLog).values({
+                id: generateId("nl"),
+                session_id: sessionId,
+                t_ms: Date.now() - sessionStartMs,
+                reasoning_text: narratorFullText,
+              });
+            }
+          } catch {
+            // Narrator failure is non-critical — don't crash the session
+          }
+        }
+
+        controller.enqueue(encoder.encode(formatSSE({ type: "done", data: null })));
+        controller.close();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Orchestrator error";
+        controller.enqueue(encoder.encode(formatSSE({
+          type: "error",
+          data: { message },
+        })));
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readableStream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
+}
+
+// --- Agent runners ---
+
+async function runFormCritic(prompt: string, frameBase64?: string) {
+  const defaultResult = {
+    faults: [],
+    quality: 0.5,
+    compensations: [],
+    tempo_deviation: 0,
+  };
+
+  try {
+    let raw: string;
+    if (frameBase64) {
+      raw = await callClaudeVision({
+        model: "claude-sonnet-4-6-20250514",
+        system: FORM_CRITIC_SYSTEM,
+        imageBase64: frameBase64,
+        prompt: `Analyze this rep with visual + keypoint data:\n${prompt}\n\nOutput RepAnalysis JSON.`,
+        maxTokens: 2048,
+      });
+    } else {
+      raw = await callClaudeSimple({
+        model: "claude-sonnet-4-6-20250514",
+        system: FORM_CRITIC_SYSTEM,
+        prompt: `Analyze this rep:\n${prompt}\n\nOutput RepAnalysis JSON.`,
+        maxTokens: 2048,
+      });
+    }
+    return parseJSON(raw, defaultResult);
+  } catch {
+    return defaultResult;
+  }
+}
+
+async function runSafetyMonitor(prompt: string, frameBase64?: string) {
+  const defaultResult = {
+    halt: false,
+    red_flag_type: null as string | null,
+    severity: 1,
+    reasoning: "",
+    recommendation: "",
+  };
+
+  try {
+    let raw: string;
+    if (frameBase64) {
+      raw = await callClaudeVision({
+        model: "claude-haiku-4-5-20251001",
+        system: SAFETY_MONITOR_SYSTEM,
+        imageBase64: frameBase64,
+        prompt: `Safety check:\n${prompt}\n\nOutput safety JSON.`,
+        maxTokens: 512,
+      });
+    } else {
+      raw = await callClaudeSimple({
+        model: "claude-haiku-4-5-20251001",
+        system: SAFETY_MONITOR_SYSTEM,
+        prompt: `Safety check:\n${prompt}\n\nOutput safety JSON.`,
+        maxTokens: 512,
+      });
+    }
+    return parseJSON(raw, defaultResult);
+  } catch {
+    return defaultResult;
+  }
+}
+
+async function runCueGenerator(
+  assessment: Record<string, unknown>,
+  repNumber: number,
+  setNumber: number,
+  exerciseName: string,
+) {
+  const defaultCue = {
+    text: "Keep going, nice and steady.",
+    emotion: "encouraging" as const,
+    priority: 1,
+    interrupt_current: false,
+  };
+
+  try {
+    const prompt = JSON.stringify({
+      assessment,
+      rep_number: repNumber,
+      set_number: setNumber,
+      exercise_name: exerciseName,
+    });
+
+    const raw = await callClaudeSimple({
+      model: "claude-haiku-4-5-20251001",
+      system: CUE_GENERATOR_SYSTEM,
+      prompt: `Generate a coaching cue:\n${prompt}\n\nOutput cue JSON.`,
+      maxTokens: 256,
+    });
+
+    return parseJSON(raw, defaultCue);
+  } catch {
+    return defaultCue;
   }
 }
