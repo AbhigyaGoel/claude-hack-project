@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import IntakeView from "@/components/IntakeView";
 import ConversationalIntake from "@/components/ConversationalIntake";
 import RepCounter from "@/components/RepCounter";
-import VoiceCoach from "@/components/VoiceCoach";
 import PainScale from "@/components/PainScale";
 import ExerciseGuide from "@/components/ExerciseGuide";
 import type { DiagnosticResult } from "@/types/patient";
@@ -159,6 +158,85 @@ export default function SessionPage() {
   // Observer notes for the set currently in progress. Reset at set start,
   // passed to the Reasoner at set end.
   const currentSetObserverNotesRef = useRef<string[]>([]);
+
+  // --- Observer TTS playback ---
+  // The Form Observer's commentary is spoken aloud via /api/tts. Behaviour:
+  //   - If nothing is playing: play immediately.
+  //   - If something is playing: queue at most ONE next clip; a newer one
+  //     replaces the queued one so the voice always says the most recent
+  //     observation rather than a stale one.
+  const currentObserverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const queuedObserverUrlRef = useRef<string | null>(null);
+
+  function playObserverAudioUrl(url: string) {
+    const audio = new Audio(url);
+    currentObserverAudioRef.current = audio;
+    audio.play().catch(() => {
+      // Autoplay blocked or audio element detached — just clean up.
+      URL.revokeObjectURL(url);
+    });
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      if (currentObserverAudioRef.current === audio) {
+        currentObserverAudioRef.current = null;
+      }
+      // If something is queued, play it next.
+      const next = queuedObserverUrlRef.current;
+      if (next) {
+        queuedObserverUrlRef.current = null;
+        playObserverAudioUrl(next);
+      }
+    };
+  }
+
+  async function speakObserverCommentary(text: string) {
+    if (!text?.trim()) return;
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, stability: 0.6, similarityBoost: 0.8 }),
+      });
+      if (!res.ok) {
+        logVeroWarn(`tts HTTP ${res.status}`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const current = currentObserverAudioRef.current;
+      const isPlaying = current && !current.paused && !current.ended;
+      if (isPlaying) {
+        // Replace any existing queued clip — stale observations get dropped.
+        if (queuedObserverUrlRef.current) {
+          URL.revokeObjectURL(queuedObserverUrlRef.current);
+        }
+        queuedObserverUrlRef.current = url;
+      } else {
+        playObserverAudioUrl(url);
+      }
+    } catch (err) {
+      logVeroWarn("tts fetch threw", err);
+    }
+  }
+
+  // Stop + release any audio resources on unmount.
+  useEffect(() => {
+    return () => {
+      currentObserverAudioRef.current?.pause();
+      if (queuedObserverUrlRef.current) URL.revokeObjectURL(queuedObserverUrlRef.current);
+      queuedObserverUrlRef.current = null;
+      currentObserverAudioRef.current = null;
+    };
+  }, []);
+
+  // Auto-scroll the PT Notes panel to the newest entry.
+  const ptNotesScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ptNotesScrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [commentaryEntries.length]);
 
   // Rep detection state
   const peakAngleRef = useRef(0);
@@ -478,6 +556,9 @@ export default function SessionPage() {
               `👁 Observer [${modeLabel}, rep ${newRep}, ${ms}ms]: "${data.commentary}"`,
             );
             currentSetObserverNotesRef.current.push(data.commentary);
+            // Speak the observation out loud — this is the only voice in the
+            // session now that VoiceCoach has been retired.
+            speakObserverCommentary(data.commentary);
           } else {
             logVeroWarn(`form-observer returned empty commentary (${ms}ms)`);
           }
@@ -652,10 +733,10 @@ export default function SessionPage() {
     }
   }
 
-  async function handlePostPain(value: number) {
+  function handlePostPain(value: number) {
     setPainPost(value);
-    await persistSession(value);
     setStep("summary");
+    persistSession(value);
   }
 
   async function persistSession(postPain: number) {
@@ -1151,8 +1232,8 @@ export default function SessionPage() {
               phase={movementPhase}
             />
             {commentaryEntries.length > 0 && (
-              <div className="glass-card p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2 mb-1">
+              <div className="glass-card p-3 flex flex-col gap-2 min-h-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <div
                     className="w-2 h-2 rounded-full animate-pulse"
                     style={{ background: "var(--color-accent)" }}
@@ -1163,39 +1244,50 @@ export default function SessionPage() {
                   >
                     PT Notes
                   </span>
+                  <span
+                    className="text-[10px] ml-auto"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    {commentaryEntries.length}
+                  </span>
                 </div>
-                {commentaryEntries.slice(-3).map((entry) => {
-                  const sourceLabel =
-                    entry.source === "observer"
-                      ? "Observer"
-                      : entry.source === "reasoner"
-                        ? "Reasoner"
-                        : "Coach";
-                  const sourceColor =
-                    entry.source === "observer"
-                      ? "#38bdc3"
-                      : entry.source === "reasoner"
-                        ? "#8b5cf6"
-                        : "#22c55e";
-                  return (
-                    <div
-                      key={entry.id}
-                      className="text-xs leading-relaxed p-2 rounded-lg flex flex-col gap-1"
-                      style={{
-                        background: "var(--color-surface-raised)",
-                        color: "var(--color-text-secondary)",
-                      }}
-                    >
-                      <span
-                        className="text-[10px] font-medium uppercase tracking-wide"
-                        style={{ color: sourceColor }}
+                <div
+                  ref={ptNotesScrollRef}
+                  className="flex flex-col gap-2 overflow-y-auto max-h-64 pr-1"
+                >
+                  {commentaryEntries.map((entry) => {
+                    const sourceLabel =
+                      entry.source === "observer"
+                        ? "Observer"
+                        : entry.source === "reasoner"
+                          ? "Reasoner"
+                          : "Coach";
+                    const sourceColor =
+                      entry.source === "observer"
+                        ? "#38bdc3"
+                        : entry.source === "reasoner"
+                          ? "#8b5cf6"
+                          : "#22c55e";
+                    return (
+                      <div
+                        key={entry.id}
+                        className="text-xs leading-relaxed p-2 rounded-lg flex flex-col gap-1 shrink-0"
+                        style={{
+                          background: "var(--color-surface-raised)",
+                          color: "var(--color-text-secondary)",
+                        }}
                       >
-                        {sourceLabel}
-                      </span>
-                      <span>{entry.text}</span>
-                    </div>
-                  );
-                })}
+                        <span
+                          className="text-[10px] font-medium uppercase tracking-wide"
+                          style={{ color: sourceColor }}
+                        >
+                          {sourceLabel}
+                        </span>
+                        <span>{entry.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             <button
@@ -1338,26 +1430,9 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* VoiceCoach — persisted across exercising/rest to prevent session remount */}
-      {currentExercise && (step === "exercising" || step === "rest") && (
-        <div
-          className="fixed bottom-4 right-4 w-72 z-40"
-          style={{ display: step === "exercising" ? "block" : "none" }}
-        >
-          <VoiceCoach
-            currentRep={currentRep}
-            totalReps={currentExercise.reps}
-            currentSet={currentSet}
-            totalSets={currentExercise.sets}
-            lastRepQuality={lastRepQuality}
-            movementPhase={movementPhase}
-            exerciseName={currentExercise.name}
-            currentAngle={currentAngle}
-            targetAngle={Object.values(currentExercise.target_angles)[0]}
-            isPaused={step === "rest"}
-          />
-        </div>
-      )}
+      {/* The in-session voice is now driven by the Form Observer agent —
+          each observation is streamed to /api/tts and played inline. No
+          separate coaching component is mounted here. */}
 
       {/* Exit confirmation */}
       {showExitConfirm && (
