@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Conversation } from "@11labs/client";
 import type { DiagnosticResult } from "@/types/patient";
 import type { BodyRegion } from "@/types/exercise";
+import { RED_FLAG_ID_TO_RESPONSE } from "@/lib/conversationalIntakeConfig";
 
 interface ConversationalIntakeProps {
   onComplete: (result: DiagnosticResult) => void;
@@ -12,7 +13,7 @@ interface ConversationalIntakeProps {
   onLiveUpdate?: (data: { region?: BodyRegion; responses?: Record<string, string> }) => void;
 }
 
-type ConvStatus = "idle" | "connecting" | "active" | "processing" | "error";
+type ConvStatus = "idle" | "connecting" | "active" | "processing" | "autofilled" | "error";
 type SpeakMode = "listening" | "speaking";
 
 interface TranscriptEntry {
@@ -88,9 +89,9 @@ export default function ConversationalIntake({
             return "recorded";
           },
 
-          /** Agent calls this when full assessment is collected */
+          /** Agent calls this once with everything extracted from the free description */
           complete_assessment: async ({
-            body_region, side, onset, mechanism, pain_level, functional_responses,
+            body_region, side, onset, mechanism, pain_level, functional_responses, red_flags,
           }: {
             body_region: BodyRegion;
             side: string;
@@ -98,52 +99,45 @@ export default function ConversationalIntake({
             mechanism?: string;
             pain_level: number;
             functional_responses?: Record<string, string>;
+            red_flags?: string[];
           }) => {
-            setStatus("processing");
+            bodyRegionRef.current = body_region;
+            redFlagsRef.current = red_flags ?? [];
 
-            try {
-              const responses = {
-                side,
-                onset,
-                mechanism: mechanism ?? "unknown",
-                pain_level: String(pain_level),
-                ...(functional_responses ?? {}),
-              };
-
-              // Push final assessment data to the survey before processing
-              onLiveUpdate?.({ region: body_region, responses });
-
-              const intakeRes = await fetch("/api/intake", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  bodyRegion: body_region,
-                  responses,
-                  redFlags: redFlagsRef.current,
-                }),
-              });
-
-              if (!intakeRes.ok) throw new Error("Intake API failed");
-              const data = await intakeRes.json();
-              onComplete(data.diagnostic as DiagnosticResult);
-            } catch (err) {
-              console.error("[ConversationalIntake] complete_assessment error:", err);
-              // Fallback: build a minimal DiagnosticResult from what we have
-              onComplete({
-                body_region: body_region ?? bodyRegionRef.current ?? "shoulder",
-                side: (side as "left" | "right" | "bilateral") ?? "bilateral",
-                onset: onset ?? "unknown",
-                mechanism: mechanism ?? "unknown",
-                severity_score: Math.round(pain_level * 10),
-                instrument_used: "voice",
-                functional_deficits: [],
-                contraindications: [],
-                red_flags: redFlagsRef.current,
-                cleared_for_exercise: redFlagsRef.current.length === 0,
-              });
+            // Build red flag form responses — default all to "No", mark detected ones
+            const redFlagResponses: Record<string, string> = {
+              numbness: "No",
+              bowel_bladder: "No",
+              night_pain: "No",
+              fever: "No",
+              trauma: "No",
+              weight_loss: "No",
+            };
+            for (const flag of red_flags ?? []) {
+              const mapping = RED_FLAG_ID_TO_RESPONSE[flag];
+              if (mapping) redFlagResponses[mapping.field] = mapping.value;
             }
 
-            return "complete";
+            const allResponses: Record<string, string> = {
+              ...redFlagResponses,
+              side,
+              onset,
+              mechanism: mechanism ?? "Unknown",
+              pain_level: String(pain_level),
+              ...(functional_responses ?? {}),
+            };
+
+            // Push all data to the form at once — IntakeView will auto-advance
+            onLiveUpdate?.({ region: body_region, responses: allResponses });
+
+            // End the voice session — user reviews the pre-filled form
+            if (conversationRef.current) {
+              await conversationRef.current.endSession();
+              conversationRef.current = null;
+            }
+            setStatus("autofilled");
+
+            return "autofilled";
           },
         },
 
@@ -151,7 +145,8 @@ export default function ConversationalIntake({
 
         onDisconnect: () => {
           conversationRef.current = null;
-          // If still active (agent ended), leave status as-is so processing spinner stays
+          // Only reset to idle if we're still in the active state (unexpected disconnect)
+          // Leave autofilled/processing states as-is
           setStatus((prev) => (prev === "active" ? "idle" : prev));
         },
 
@@ -196,15 +191,42 @@ export default function ConversationalIntake({
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  if (status === "autofilled") {
+    return (
+      <div className="glass-card p-8 text-center animate-fade-in flex flex-col items-center gap-4">
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center"
+          style={{ background: "var(--color-success-dim)", border: "1px solid var(--color-success)" }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+            Form pre-filled
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
+            Review the form on the right, adjust anything that looks off, then hit continue.
+          </p>
+        </div>
+        <button
+          onClick={() => { setStatus("idle"); setTranscript([]); bodyRegionRef.current = null; redFlagsRef.current = []; }}
+          className="text-xs"
+          style={{ color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
+        >
+          Start over
+        </button>
+      </div>
+    );
+  }
+
   if (status === "processing") {
     return (
       <div className="glass-card p-10 text-center animate-fade-in">
         <div className="spinner mx-auto mb-5" />
         <p className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>
-          Analyzing your responses...
-        </p>
-        <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
-          Building your personalized exercise plan
+          Processing...
         </p>
       </div>
     );
