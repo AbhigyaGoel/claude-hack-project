@@ -66,7 +66,7 @@ import {
  */
 const EXACT_MATCH: Record<string, MovementTemplate> = {
   // Shoulder
-  wall_slide_01: overheadReach,
+  wall_slide_01: overheadReach, // W-to-Y wall slide animation
   shoulder_flexion_supine_01: supineArmRaise,
   pendulum_01: pendulum,
   external_rotation_sidelying_01: sidelyingER,
