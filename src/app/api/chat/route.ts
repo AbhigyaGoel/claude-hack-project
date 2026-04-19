@@ -3,14 +3,19 @@ import { callClaude } from "@/lib/claude/client";
 import { CHAT_SYSTEM } from "@/lib/claude/prompts";
 import { loadPatientContext, createMemoryToolHandlers, MEMORY_TOOLS } from "@/lib/claude/memory";
 import { getDb } from "@/db";
-import { chatMessages } from "@/db/schema";
-import { getDemoUserId } from "@/lib/supabase";
-import { eq } from "drizzle-orm";
+import { chatMessages, patients } from "@/db/schema";
+import { getCurrentUserId } from "@/lib/auth";
+import { and, eq } from "drizzle-orm";
 
 const MAX_HISTORY_MESSAGES = 20;
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      return Response.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { patient_id, message } = body;
 
@@ -22,6 +27,17 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getDb();
+
+    // Confirm the patient belongs to the current user before exposing any
+    // data — this is the only boundary that keeps users apart.
+    const owned = await db
+      .select({ id: patients.id })
+      .from(patients)
+      .where(and(eq(patients.id, patient_id), eq(patients.user_id, userId)))
+      .limit(1);
+    if (owned.length === 0) {
+      return Response.json({ error: "patient not found" }, { status: 404 });
+    }
 
     // Load patient context from memory files
     const patientContext = await loadPatientContext(patient_id);
@@ -61,7 +77,6 @@ export async function POST(req: NextRequest) {
     });
 
     const assistantResponse = result.response;
-    const userId = getDemoUserId();
 
     // Save user message to database (id and created_at default in DB)
     await db.insert(chatMessages).values({

@@ -4,7 +4,7 @@ import { INTAKE_SYSTEM } from "@/lib/claude/prompts";
 import { spawnDifferentialResolver } from "@/lib/claude/sub-agents";
 import { getDb } from "@/db";
 import { patients } from "@/db/schema";
-import { getDemoUserId } from "@/lib/supabase";
+import { getCurrentUserId } from "@/lib/auth";
 
 const SCREENING_INSTRUMENTS: Record<string, { name: string; questions: string[] }> = {
   shoulder: {
@@ -108,6 +108,11 @@ const tools = [
 ];
 
 export async function POST(req: NextRequest) {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const body = await req.json();
   const { bodyRegion, responses, patientName } = body;
 
@@ -239,7 +244,7 @@ export async function POST(req: NextRequest) {
   const [row] = await db
     .insert(patients)
     .values({
-      user_id: getDemoUserId(),
+      user_id: userId,
       name: patientName || "Patient",
       profile_json: {
         name: patientName || "Patient",

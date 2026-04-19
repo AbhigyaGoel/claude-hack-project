@@ -80,6 +80,43 @@ export async function saveSession(input: SaveSessionInput): Promise<{ id: string
   return asJson<{ id: string }>(res);
 }
 
+// --- Auth ---
+
+export interface CurrentUser {
+  id: string;
+  username: string;
+  created_at?: string | null;
+}
+
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const res = await fetch("/api/auth/me", { cache: "no-store" });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  return (data?.user as CurrentUser | null) ?? null;
+}
+
+export async function login(username: string, password: string): Promise<CurrentUser> {
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  return asJson<CurrentUser>(res);
+}
+
+export async function signup(username: string, password: string): Promise<CurrentUser> {
+  const res = await fetch("/api/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  return asJson<CurrentUser>(res);
+}
+
+export async function logout(): Promise<void> {
+  await fetch("/api/auth/logout", { method: "POST" });
+}
+
 // --- Active patient selection (client UI state only) ---
 
 const ACTIVE_KEY = "vero:activePatientId";

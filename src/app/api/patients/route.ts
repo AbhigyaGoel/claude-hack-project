@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { patients, sessions } from "@/db/schema";
-import { getDemoUserId } from "@/lib/supabase";
+import { getCurrentUserId } from "@/lib/auth";
+
+function unauthorized() {
+  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
 
 export async function GET() {
-  const db = getDb();
-  const userId = getDemoUserId();
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
 
+  const db = getDb();
   const rows = await db
     .select()
     .from(patients)
@@ -37,8 +42,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const db = getDb();
-  const userId = getDemoUserId();
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const body = await req.json();
   const { name, diagnostic } = body as {
     name?: string;
@@ -49,6 +55,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
+  const db = getDb();
   const [row] = await db
     .insert(patients)
     .values({
@@ -68,14 +75,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const db = getDb();
-  const userId = getDemoUserId();
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
+  const db = getDb();
   await db
     .delete(patients)
     .where(and(eq(patients.id, id), eq(patients.user_id, userId)));

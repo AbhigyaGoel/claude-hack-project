@@ -3,19 +3,57 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { PatientRecord } from "@/types/storage";
-import { getActivePatient } from "@/lib/api";
+import { getActivePatient, clearActivePatient, getCurrentUser, logout } from "@/lib/api";
 
 export default function Home() {
   const [profile, setProfile] = useState<PatientRecord | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
+    getCurrentUser()
+      .then((u) => setUsername(u?.username ?? null))
+      .catch(() => setUsername(null));
     getActivePatient()
       .then(setProfile)
       .catch(() => setProfile(null));
   }, []);
 
+  async function handleLogout() {
+    clearActivePatient();
+    await logout();
+    window.location.href = "/login";
+  }
+
   return (
     <main className="flex-1 flex items-center justify-center relative overflow-hidden">
+      {/* Signed-in chip — top-right */}
+      {username && (
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+          <span
+            className="text-xs px-3 py-1.5 rounded-full"
+            style={{
+              background: "var(--color-surface-raised)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            @{username}
+          </span>
+          <button
+            onClick={handleLogout}
+            className="text-xs px-3 py-1.5 rounded-full transition-colors hover:opacity-80"
+            style={{
+              background: "transparent",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-muted)",
+              cursor: "pointer",
+            }}
+          >
+            Log out
+          </button>
+        </div>
+      )}
+
       {/* Background radial glow */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full pointer-events-none"

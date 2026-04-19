@@ -1,7 +1,16 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { patientMemory } from "@/db/schema";
-import { getDemoUserId } from "@/lib/supabase";
+import { patientMemory, patients } from "@/db/schema";
+
+async function getOwnerId(patientId: string): Promise<string | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ user_id: patients.user_id })
+    .from(patients)
+    .where(eq(patients.id, patientId))
+    .limit(1);
+  return row?.user_id ?? null;
+}
 
 /**
  * Patient memory — persistent per-patient notes curated by Claude.
@@ -45,7 +54,7 @@ export async function writeMemoryFile(
     .insert(patientMemory)
     .values({
       patient_id: patientId,
-      user_id: getDemoUserId(),
+      user_id: await getOwnerId(patientId),
       filename,
       content,
       updated_at: new Date(),
@@ -66,7 +75,7 @@ export async function appendMemoryFile(
     .insert(patientMemory)
     .values({
       patient_id: patientId,
-      user_id: getDemoUserId(),
+      user_id: await getOwnerId(patientId),
       filename,
       content,
       updated_at: new Date(),
