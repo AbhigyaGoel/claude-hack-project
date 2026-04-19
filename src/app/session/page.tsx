@@ -154,9 +154,11 @@ export default function SessionPage() {
   // Agent state
   const [narratorEntries, setNarratorEntries] = useState<{ id: string; text: string }[]>([]);
   const [safetyHalt, setSafetyHalt] = useState<string | null>(null);
+  const [safetyWarnings, setSafetyWarnings] = useState<string[]>([]);
   const [formCriticFaults, setFormCriticFaults] = useState<string[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastVisionTimeRef = useRef(0);
+  const latestKeypointsRef = useRef<Landmark[] | null>(null);
 
   // Tracking refs
   const sessionStartRef = useRef<number>(0);
@@ -284,21 +286,46 @@ export default function SessionPage() {
   }, []);
 
   /** Safety Monitor: check for red flags via Haiku — runs on vision frames */
-  const callSafetyMonitor = useCallback(async (frameBase64?: string) => {
+  const callSafetyMonitor = useCallback(async (
+    frameBase64?: string,
+    keypoints?: unknown,
+  ) => {
     try {
+      const exercise = plan?.exercises[currentExerciseIndex];
       const res = await fetch("/api/safety-monitor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          session_id: `session_${sessionStartRef.current}`,
+          session_id: sessionIdRef.current,
+          patient_id: activeProfile?.id,
+          exercise_name: exercise?.name,
+          rep_number: currentRep,
+          set_number: currentSet,
+          pain_pre: painPre,
+          current_faults: formCriticFaults,
+          keypoints: keypoints ?? null,
           frame_base64: frameBase64,
         }),
       });
       if (!res.ok) {
-        logVeroWarn(`safety-monitor returned ${res.status} — endpoint not wired (red_flags will stay empty)`);
+        logVeroWarn(`safety-monitor returned ${res.status}`);
         return;
       }
       const data = await res.json();
+
+      // Show warnings in UI
+      if (data.alerts?.length > 0) {
+        const warnings = data.alerts
+          .filter((a: { severity: number }) => a.severity >= 3)
+          .map((a: { description: string }) => a.description);
+        if (warnings.length > 0) {
+          setSafetyWarnings(warnings);
+          logVeroWarn("safety-monitor warnings", warnings);
+          // Auto-clear warnings after 8 seconds so they don't pile up
+          setTimeout(() => setSafetyWarnings([]), 8000);
+        }
+      }
+
       if (data.halt) {
         logVeroWarn("safety-monitor flagged HALT", data);
         setSafetyHalt(data.red_flag_type || "Red flag detected");
@@ -307,7 +334,7 @@ export default function SessionPage() {
     } catch (err) {
       logVeroWarn("safety-monitor fetch threw", err);
     }
-  }, []);
+  }, [activeProfile?.id, plan, currentExerciseIndex, currentRep, currentSet, painPre, formCriticFaults]);
 
   /** Clinical Narrator: stream reasoning to side panel after each rep */
   const callNarrator = useCallback(async (exercise: ExercisePlanItem, repNum: number, quality: string, peakAngle: number) => {
@@ -372,7 +399,7 @@ export default function SessionPage() {
       if (!ctx) return;
       ctx.drawImage(videoRef.current, 0, 0, 320, 240);
       const base64 = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
-      callSafetyMonitor(base64);
+      callSafetyMonitor(base64, latestKeypointsRef.current ?? undefined);
     } catch { /* non-blocking */ }
   }, [callSafetyMonitor]);
 
@@ -681,6 +708,9 @@ export default function SessionPage() {
     (_landmarks: Landmark[], angles: Record<string, number>) => {
       if (!currentExercise) return;
 
+      // Store latest keypoints for safety monitor
+      latestKeypointsRef.current = _landmarks;
+
       // Run safety monitor on vision frames (every 3s, non-blocking)
       sendVisionFrame();
 
@@ -879,7 +909,7 @@ export default function SessionPage() {
         "narrator_log — reasoner (set notes)": `✓ ~${totalSetsCompleted} written`,
         "narrator_log — coach (session recap)": "✓ 1 written",
         "form_events rows": "✗ 0 — /api/form-critic endpoint not wired",
-        "red_flags rows": "✗ 0 — /api/safety-monitor endpoint not wired",
+        "red_flags rows": "✓ written on halt — /api/safety-monitor persists to red_flags table",
       });
 
       return result.id;
@@ -1425,6 +1455,15 @@ export default function SessionPage() {
             >
               Skip Exercise →
             </button>
+            {/* Safety warnings */}
+            {safetyWarnings.length > 0 && (
+              <div className="glass-card p-3" style={{ borderColor: "#ef4444", background: "rgba(239,68,68,0.08)" }}>
+                <div className="text-xs font-medium mb-1" style={{ color: "#ef4444" }}>Safety Alert</div>
+                {safetyWarnings.map((w, i) => (
+                  <div key={i} className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{w}</div>
+                ))}
+              </div>
+            )}
             {/* Form Critic feedback */}
             {formCriticFaults.length > 0 && (
               <div className="glass-card p-3" style={{ borderColor: "#eab308" }}>
@@ -1543,11 +1582,25 @@ export default function SessionPage() {
       {step === "summary" && (
         <div className="flex-1 flex items-center justify-center animate-fade-in p-6 overflow-y-auto">
           <div className="glass-card-bright p-8 max-w-xl w-full">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--color-success-dim)" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+            {safetyHalt && (
+              <div className="mb-5 p-4 rounded-xl" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.4)" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                  <span className="text-sm font-semibold" style={{ color: "#ef4444" }}>Session Stopped — Safety Concern</span>
+                </div>
+                <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                  {safetyHalt}. Please consult your physical therapist before continuing.
+                </p>
               </div>
-              <h2 className="text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>Session Complete</h2>
+            )}
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: safetyHalt ? "rgba(239,68,68,0.15)" : "var(--color-success-dim)" }}>
+                {safetyHalt
+                  ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                }
+              </div>
+              <h2 className="text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>{safetyHalt ? "Session Ended Early" : "Session Complete"}</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-5">

@@ -2,7 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import * as d3 from "d3";
-import type { ChartDataPoint } from "@/agents/progressAnalyst";
+export interface ChartDataPoint {
+  session_number: number;
+  date: string;
+  metric: string;
+  value: number;
+}
 
 interface ProgressChartProps {
   data: ChartDataPoint[];

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import ProgressChart from "@/components/ProgressChart";
 import type { PatientRecord, SessionRecord } from "@/types/storage";
-import type { ChartDataPoint } from "@/agents/progressAnalyst";
+import type { ChartDataPoint } from "@/components/ProgressChart";
 import {
   listPatients,
   listSessions,
