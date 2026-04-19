@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           const stream = streamClaude({
-            model: "claude-opus-4-7-20250219",
+            model: "claude-opus-4-7",
             system: NARRATOR_SYSTEM,
             systemParts,
             messages: [

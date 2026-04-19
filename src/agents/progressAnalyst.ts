@@ -1,6 +1,6 @@
 import type { SessionState } from "@/types/session";
 import type { FormAssessment } from "@/types/assessment";
-import { callClaudeWithTools, type ClaudeTool } from "@/lib/claude";
+import { callClaude, type ToolDef as ClaudeTool } from "@/lib/claude/client";
 
 export interface SessionMetrics {
   exercises_completed: number;
@@ -186,9 +186,9 @@ export async function analyzeSession(
     };
 
     try {
-      const result = await callClaudeWithTools(
-        SYSTEM_PROMPT,
-        [
+      const result = await callClaude({
+        system: SYSTEM_PROMPT,
+        messages: [
           {
             role: "user",
             content: JSON.stringify({
@@ -200,7 +200,7 @@ export async function analyzeSession(
         ],
         tools,
         toolHandlers,
-      );
+      });
 
       // Parse any additional insights from Claude's response
       try {

@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (frame_base64) {
       // Use vision model to cross-reference keypoint data with visual frame
       rawResponse = await callClaudeVision({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-6",
         system: FORM_CRITIC_SYSTEM,
         imageBase64: frame_base64,
         prompt: `Analyze this rep. Keypoint timeseries and exercise context:\n${prompt}\n\nCross-reference the visual frame with the keypoint data. Output RepAnalysis JSON.`,
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Keypoint-only analysis
       rawResponse = await callClaudeSimple({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-6",
         system: FORM_CRITIC_SYSTEM,
         prompt: `Analyze this rep from keypoint timeseries data:\n${prompt}\n\nOutput RepAnalysis JSON.`,
         maxTokens: 2048,

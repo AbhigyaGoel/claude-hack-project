@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await callClaude({
-      model: "claude-opus-4-7-20250219",
+      model: "claude-opus-4-7",
       system: REPORT_SYSTEM,
       messages: [
         {

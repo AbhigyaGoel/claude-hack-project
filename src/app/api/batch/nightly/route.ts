@@ -105,7 +105,7 @@ export async function POST() {
 
     try {
       const result = await callClaude({
-        model: "claude-opus-4-7-20250219",
+        model: "claude-opus-4-7",
         system: BATCH_ANALYSIS_SYSTEM,
         messages: [
           {

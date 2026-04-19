@@ -330,7 +330,7 @@ async function handleEvaluateRep(
 
           try {
             const narratorStream = streamClaude({
-              model: "claude-opus-4-7-20250219",
+              model: "claude-opus-4-7",
               system: NARRATOR_SYSTEM,
               systemParts: narratorSystemParts,
               messages: [
@@ -404,7 +404,7 @@ async function runFormCritic(prompt: string, frameBase64?: string, systemParts?:
     if (frameBase64) {
       // Vision calls don't support systemParts yet — use plain system
       raw = await callClaudeVision({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-6",
         system: systemParts ? systemParts.join("") : FORM_CRITIC_SYSTEM,
         imageBase64: frameBase64,
         prompt: `Analyze this rep with visual + keypoint data:\n${prompt}\n\nOutput RepAnalysis JSON.`,
@@ -413,7 +413,7 @@ async function runFormCritic(prompt: string, frameBase64?: string, systemParts?:
     } else {
       // Use streaming-compatible callClaudeSimple with cached system
       raw = await callClaudeSimple({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-6",
         system: FORM_CRITIC_SYSTEM,
         systemParts,
         prompt: `Analyze this rep:\n${prompt}\n\nOutput RepAnalysis JSON.`,

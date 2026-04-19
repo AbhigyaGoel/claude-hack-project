@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     const systemWithContext = `${CHAT_SYSTEM}\n\n## Patient Context\n${patientContext}`;
 
     const result = await callClaude({
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-sonnet-4-6",
       system: systemWithContext,
       messages: conversationHistory,
       tools: MEMORY_TOOLS,

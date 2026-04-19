@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const response = await callClaudeVision({
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-sonnet-4-6",
       system: VISION_SYSTEM,
       imageBase64: frame_base64,
       prompt,
