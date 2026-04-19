@@ -36,11 +36,19 @@ function lateralTilt(left: Landmark, right: Landmark): number {
 
 // --- Joint-specific calculations ---
 
+/**
+ * Shoulder flexion — how far the arm is raised.
+ * Returns 0° when arm is at side, ~90° at shoulder height, ~180° overhead.
+ * This is the clinical definition: degrees of elevation from neutral.
+ */
 export function calculateShoulderFlexion(landmarks: Landmark[], side: "left" | "right"): number {
   const hip = landmarks[side === "left" ? LANDMARK.LEFT_HIP : LANDMARK.RIGHT_HIP];
   const shoulder = landmarks[side === "left" ? LANDMARK.LEFT_SHOULDER : LANDMARK.RIGHT_SHOULDER];
   const elbow = landmarks[side === "left" ? LANDMARK.LEFT_ELBOW : LANDMARK.RIGHT_ELBOW];
-  return calculateAngle(hip, shoulder, elbow);
+  const rawAngle = calculateAngle(hip, shoulder, elbow);
+  // Raw angle: ~170° at side, ~90° at shoulder height, ~10° overhead
+  // Convert to flexion: 0° at side, ~80° at shoulder height, ~160° overhead
+  return Math.max(0, 180 - rawAngle);
 }
 
 export function calculateElbowFlexion(landmarks: Landmark[], side: "left" | "right"): number {
@@ -50,18 +58,30 @@ export function calculateElbowFlexion(landmarks: Landmark[], side: "left" | "rig
   return calculateAngle(shoulder, elbow, wrist);
 }
 
+/**
+ * Hip flexion — how far the hip is bent.
+ * Returns 0° standing upright, ~90° in a squat, ~120° pulling knee to chest.
+ */
 export function calculateHipFlexion(landmarks: Landmark[], side: "left" | "right"): number {
   const shoulder = landmarks[side === "left" ? LANDMARK.LEFT_SHOULDER : LANDMARK.RIGHT_SHOULDER];
   const hip = landmarks[side === "left" ? LANDMARK.LEFT_HIP : LANDMARK.RIGHT_HIP];
   const knee = landmarks[side === "left" ? LANDMARK.LEFT_KNEE : LANDMARK.RIGHT_KNEE];
-  return calculateAngle(shoulder, hip, knee);
+  const rawAngle = calculateAngle(shoulder, hip, knee);
+  // Raw: ~175° standing, ~90° bent. Convert to flexion: 0° standing, ~85° bent
+  return Math.max(0, 180 - rawAngle);
 }
 
+/**
+ * Knee flexion — how far the knee is bent.
+ * Returns 0° when leg is straight, ~90° in a squat, ~130° in deep flexion.
+ */
 export function calculateKneeFlexion(landmarks: Landmark[], side: "left" | "right"): number {
   const hip = landmarks[side === "left" ? LANDMARK.LEFT_HIP : LANDMARK.RIGHT_HIP];
   const knee = landmarks[side === "left" ? LANDMARK.LEFT_KNEE : LANDMARK.RIGHT_KNEE];
   const ankle = landmarks[side === "left" ? LANDMARK.LEFT_ANKLE : LANDMARK.RIGHT_ANKLE];
-  return calculateAngle(hip, knee, ankle);
+  const rawAngle = calculateAngle(hip, knee, ankle);
+  // Raw: ~175° straight, ~90° bent. Convert to flexion: 0° straight, ~85° bent
+  return Math.max(0, 180 - rawAngle);
 }
 
 /**

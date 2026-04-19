@@ -402,12 +402,19 @@ export default function SessionPage() {
       setCurrentAngle(angle);
 
       const targetAngle = Object.values(currentExercise.target_angles)[0];
-      const threshold = targetAngle * 0.3;
-      const peakThreshold = targetAngle * 0.7;
+      // Start threshold: must move at least 25% of target range to begin tracking
+      const startThreshold = Math.max(targetAngle * 0.25, 15);
+      // Reset threshold: must return below 15% of target to complete a rep
+      const resetThreshold = Math.max(targetAngle * 0.15, 10);
+      // Peak threshold: must reach at least 50% of target for rep to count
+      const peakThreshold = targetAngle * 0.5;
+      // Minimum rep duration: 800ms to filter noise
+      const minRepDuration = 800;
+
       const phase = repPhaseRef.current;
 
       if (phase === "idle") {
-        if (angle > threshold) {
+        if (angle > startThreshold) {
           repPhaseRef.current = "ascending";
           repStartTimeRef.current = performance.now();
           peakAngleRef.current = angle;
@@ -417,16 +424,22 @@ export default function SessionPage() {
         }
       } else if (phase === "ascending") {
         if (angle > peakAngleRef.current) peakAngleRef.current = angle;
-        if (angle < peakAngleRef.current - 8) {
+        // Detect peak: angle must drop by at least 12° from peak
+        if (angle < peakAngleRef.current - 12) {
           repPhaseRef.current = "descending";
           setMovementPhase("lowering");
-        } else if (angle >= targetAngle * 0.9) {
+        } else if (angle >= targetAngle * 0.85) {
           setMovementPhase("holding");
         }
       } else if (phase === "descending") {
-        if (angle <= threshold) {
-          if (peakAngleRef.current >= peakThreshold) completeRep();
+        if (angle <= resetThreshold) {
+          const elapsed = performance.now() - repStartTimeRef.current;
+          // Only count if peak was high enough AND rep took long enough
+          if (peakAngleRef.current >= peakThreshold && elapsed >= minRepDuration) {
+            completeRep();
+          }
           repPhaseRef.current = "idle";
+          peakAngleRef.current = 0;
           setMovementPhase("ready");
         }
       }
