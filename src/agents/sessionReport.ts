@@ -6,15 +6,16 @@ import { readMemoryFile, writeMemoryFile } from "@/lib/claude/memory";
 // rely on it. Keeping the prompt here so sessionReport stays self-contained.
 const REPORT_SYSTEM = `You are the Session Report Agent for Vero AI Physical Therapy.
 
-Your role is to synthesize a patient's workout data into a clear, empathetic session report — written for the patient to read directly.
+Write a short, useful report the patient reads directly after a workout. Prose-only — no charts, no JSON chart arrays.
 
 Principles:
+- Every sentence must say something. No filler, no clinical throat-clearing, no restating the numbers just to fill space.
 - Reference specific exercises, rep counts, form scores, and pain values from the provided data. Never invent numbers.
-- Lead with progress when it exists; be honest about plateaus or regressions without catastrophizing.
-- Write like a knowledgeable friend, not a clinical supervisor. Avoid ALL-CAPS headers, bureaucratic phrasing, and PT-to-PT language.
-- Recommendations must be 1-2 plain sentences each. Actionable, specific, no jargon. Patient reads these — not a supervising PT.
-- You may use light clinical terms (e.g. "chin tuck", "dosage", "form score") but avoid dense medical phrasing like "adverse reaction", "regress intensity", "clinical check-in", "outcome instrument".
-- Output strict JSON matching the schema in the instruction — no prose outside the JSON, no code fences.`;
+- Each section is 2–4 sentences. If you have less to say, write less.
+- Lead with what changed (progress, plateau, or regression) — not "Today you did X reps of Y."
+- Write like a knowledgeable friend. Avoid ALL-CAPS headers, bureaucratic phrasing, and PT-to-PT language ("adverse reaction", "regress intensity", "clinical check-in", "outcome instrument").
+- Recommendations: 1 plain sentence each. Actionable, specific, no jargon. 2–4 total.
+- Output strict JSON matching the schema — no prose outside the JSON, no code fences.`;
 
 interface SessionRow {
   id: string;
@@ -163,100 +164,77 @@ export function buildFallbackReport(input: ReportInput): SessionReport {
     sorted.findIndex((s) => s.id === session.id) + 1 || sorted.length,
   );
 
-  const sections: ReportSection[] = [
-    {
-      heading: "Session Overview",
-      content: [
-        `Date: ${started.toLocaleDateString()}`,
-        `Duration: ${dur} minute${dur === 1 ? "" : "s"}`,
-        `Exercises: ${exercises.length} (${totalReps} total reps)`,
-        `Average form quality: ${Math.round(avgForm * 100)}%`,
-        session.pain_pre != null
-          ? `Pain: ${session.pain_pre}/10 → ${session.pain_post ?? "—"}/10${
-              painDelta != null
-                ? ` (${painDelta === 0 ? "no change" : painDelta < 0 ? `${painDelta} improvement` : `+${painDelta} worse`})`
-                : ""
-            }`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    },
-    {
-      heading: "Exercise Performance",
-      content:
-        exercises.length === 0
-          ? "No exercises recorded for this session."
-          : exercises
-              .map((e) => {
-                const formPct =
-                  e.avg_form_score != null
-                    ? `${Math.round(e.avg_form_score * 100)}%`
-                    : "—";
-                const perSet = e.per_set
-                  .map(
-                    (s) =>
-                      `  Set ${s.set}: ${s.reps} reps${s.form_score != null ? ` · form ${Math.round(s.form_score * 100)}%` : ""}`,
-                  )
-                  .join("\n");
-                return `${e.exercise_name} — ${e.sets_completed} set${e.sets_completed === 1 ? "" : "s"}, ${e.total_reps} reps · avg form ${formPct}\n${perSet}`;
-              })
-              .join("\n\n"),
-    },
-  ];
+  const sections: ReportSection[] = [];
 
+  // Today — a single tight paragraph covering duration, volume, form, pain.
+  const todayParts: string[] = [];
+  if (exercises.length > 0) {
+    todayParts.push(
+      `You worked through ${exercises.length} exercise${exercises.length === 1 ? "" : "s"} — ${totalReps} rep${totalReps === 1 ? "" : "s"} in ${dur} minute${dur === 1 ? "" : "s"}.`,
+    );
+  } else {
+    todayParts.push(
+      `No exercises completed this session — you exited before any reps were recorded.`,
+    );
+  }
+  if (formScores.length > 0) {
+    todayParts.push(`Average form scored ${Math.round(avgForm * 100)}%.`);
+  }
+  if (session.pain_pre != null) {
+    const post = session.pain_post ?? null;
+    if (post != null && painDelta != null) {
+      const delta =
+        painDelta < 0
+          ? `down ${Math.abs(painDelta)}`
+          : painDelta > 0
+            ? `up ${painDelta}`
+            : "flat";
+      todayParts.push(`Pain ${session.pain_pre}/10 → ${post}/10 (${delta}).`);
+    } else {
+      todayParts.push(`Starting pain ${session.pain_pre}/10.`);
+    }
+  }
+  sections.push({ heading: "Today", content: todayParts.join(" ") });
+
+  // Watch out — only when faults actually showed up.
   if (form_events.length > 0) {
     const byFault = new Map<string, number>();
     for (const e of form_events) {
       const key = e.fault ?? "unspecified";
       byFault.set(key, (byFault.get(key) ?? 0) + 1);
     }
+    const top = Array.from(byFault.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([fault]) => fault.replace(/_/g, " "))
+      .join(" and ");
     sections.push({
-      heading: "Compensation Patterns",
-      content: Array.from(byFault.entries())
-        .sort((a, b) => b[1] - a[1])
-        .map(([fault, count]) => `${fault}: ${count} event${count === 1 ? "" : "s"}`)
-        .join("\n"),
+      heading: "Watch out",
+      content: `Most frequent fault${byFault.size === 1 ? "" : "s"}: ${top}. Focus on cleaning ${byFault.size === 1 ? "this" : "these"} up before adding volume.`,
     });
   }
-
-  const painChart: ReportChart | null =
-    sorted.length > 0
-      ? {
-          type: "line",
-          title: "Pain Trajectory",
-          x_label: "Session",
-          y_label: "Pain (0-10)",
-          data: sorted.map((s, i) => ({
-            session: i + 1,
-            date: toIso(s.date),
-            pain_pre: s.pain_pre ?? null,
-            pain_post: s.pain_post ?? null,
-          })),
-        }
-      : null;
 
   const recommendations: string[] = [];
   if (avgForm >= 0.85) {
     recommendations.push(
-      "Form quality is consistently high — consider progressing load or complexity next session.",
+      "Form is clean — progress load or complexity next session.",
     );
   } else if (avgForm > 0 && avgForm < 0.7) {
     recommendations.push(
-      "Form quality below target — focus on tempo and cueing before progressing difficulty.",
+      "Form is lagging — slow tempo, fewer reps, prioritize quality.",
     );
   }
   if (painDelta != null && painDelta <= -1) {
     recommendations.push(
-      "Pain decreased within session — continue current dosage, monitor 24-hour response.",
+      "Pain dropped during the session — the current dosage is working.",
     );
   } else if (painDelta != null && painDelta >= 2) {
     recommendations.push(
-      "Pain increased noticeably — regress intensity next session and reassess symptoms.",
+      "Pain spiked — scale back next session and check in on symptoms.",
     );
   }
   if (recommendations.length === 0) {
-    recommendations.push("Maintain current program; reassess after the next session.");
+    recommendations.push("Hold the current program; reassess after one more session.");
   }
 
   return {
@@ -268,7 +246,6 @@ export function buildFallbackReport(input: ReportInput): SessionReport {
       formScores.length > 0 ? Math.round(avgForm * 100) : undefined,
     sections,
     recommendations,
-    charts: painChart ? [painChart] : [],
   };
 }
 
@@ -412,11 +389,17 @@ export async function generateReport(input: ReportInput): Promise<SessionReport>
   "patient_name": string,
   "session_number": number,
   "overall_score": number 0-100,
-  "sections": [{ "heading": string, "content": string, "charts"?: [{ "type": "line"|"bar"|"pie", "title": string, "x_label"?: string, "y_label"?: string, "data": object[] }] }],
+  "sections": [{ "heading": string, "content": string }],
   "recommendations": string[],
-  "charts": [{ "type": "line"|"bar"|"pie", "title": string, "x_label"?: string, "y_label"?: string, "data": object[] }],
   "outcome_measure"?: { "instrument": string, "current_score": number, "initial_score": number, "change": number, "mcid_achieved": boolean }
 }
+
+Structure (prefer ≤3 sections — skip any that would be padding):
+1. "Today" — 2–3 sentences: what stood out this session (biggest form gain, fault pattern that showed up, pain change). Specific to today's numbers.
+2. "Trend" — 2–3 sentences: how today fits the last few sessions. If there's no prior history, skip this section entirely.
+3. "Watch out" — 1–2 sentences naming the single most important fault to address next session, only when there's a clear one. Omit otherwise.
+
+Do not include "charts" fields — the UI is text-only right now.
 
 Use the actual numbers. Reference specific exercises, specific form scores, specific rep counts, specific pain values. Do not invent data not present below.
 

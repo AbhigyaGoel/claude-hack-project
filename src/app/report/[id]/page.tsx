@@ -2,8 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import ProgressChart from "@/components/ProgressChart";
-import type { ChartDataPoint } from "@/components/ProgressChart";
 
 interface ReportSection {
   heading: string;
@@ -80,18 +78,6 @@ function formatDate(dateStr: string): string {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
   } catch { return dateStr; }
-}
-
-function transformChartData(
-  rawData: ReadonlyArray<Record<string, unknown>>,
-  yField: string,
-): ChartDataPoint[] {
-  return rawData.map((point, index) => ({
-    session_number: (point.session as number) ?? index + 1,
-    date: (point.date as string) ?? "",
-    metric: yField,
-    value: (point[yField] as number) ?? 0,
-  }));
 }
 
 function ScoreRing({ score }: { score: number }) {
@@ -419,41 +405,8 @@ export default function ReportPage() {
             <div className="text-[var(--color-text-secondary)] text-sm whitespace-pre-wrap leading-relaxed">
               {section.content}
             </div>
-            {section.charts && section.charts.length > 0 && (
-              <div className="mt-4 space-y-4">
-                {section.charts.map((chart, cIdx) => {
-                  const yField = chart.y_label?.toLowerCase().replace(/\s+/g, "_") ?? "value";
-                  return (
-                    <ProgressChart key={cIdx} data={transformChartData(chart.data, yField)} title={chart.title} yLabel={chart.y_label ?? "Value"} />
-                  );
-                })}
-              </div>
-            )}
           </section>
         ))}
-
-        {/* ── Pain Trend Chart ────────────────────────────────────────────── */}
-        {report.charts && report.charts.length > 0 && (
-          <section className="glass-card p-5">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3">Pain Trend</h2>
-            <div className="space-y-4">
-              {report.charts.map((chart, idx) => {
-                const fields = chart.data.length > 0
-                  ? Object.keys(chart.data[0]).filter((k) => k !== "session" && k !== "date")
-                  : [];
-                return fields.map((field) => (
-                  <ProgressChart
-                    key={`${idx}-${field}`}
-                    data={transformChartData(chart.data, field)}
-                    title={field.replace(/_/g, " ")}
-                    yLabel={field.replace(/_/g, " ")}
-                    color={field.includes("post") ? "#34d399" : "#60a5fa"}
-                  />
-                ));
-              })}
-            </div>
-          </section>
-        )}
 
         {/* ── Outcome Measure ─────────────────────────────────────────────── */}
         {report.outcome_measure && (
