@@ -22,6 +22,7 @@ import {
   createPatient,
   listSessions,
   saveSession,
+  startSession,
   getCurrentUser,
 } from "@/lib/api";
 
@@ -123,6 +124,7 @@ export default function SessionPage() {
 
   // Tracking refs
   const sessionStartRef = useRef<number>(0);
+  const sessionIdRef = useRef<string | null>(null);
   const repQualitiesRef = useRef<RepQuality[][]>([[]]);
   const peakAnglesRef = useRef<Record<string, number>[]>([]);
   const repsPerSetRef = useRef<number[]>([]);
@@ -335,16 +337,35 @@ export default function SessionPage() {
     setStep("diagnosis");
   }
 
-  function handlePrePain(value: number) {
+  async function handlePrePain(value: number) {
     setPainPre(value);
     sessionStartRef.current = Date.now();
+    sessionIdRef.current = null;
     repQualitiesRef.current = [[]];
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
     setCommentaryEntries([]);
+
     logVero(
       `▶ Session starting — patient=${activeProfile?.id ?? "?"} exercise=${currentExercise?.name ?? "?"} pain_pre=${value}`,
     );
+
+    // Create the sessions row NOW so every per-rep write can reference a
+    // real session_id instead of null.
+    if (activeProfile) {
+      try {
+        const started = await startSession({
+          patient_id: activeProfile.id,
+          plan_id: null,
+          pain_pre: value,
+        });
+        sessionIdRef.current = started.id;
+        logVeroOk(`✅ Created sessions row (id=${started.id}) — rep commentary will carry this session_id`);
+      } catch (err) {
+        logVeroWarn("startSession failed — rep commentary will log with session_id=null", err);
+      }
+    }
+
     logVero(
       "During the workout: each rep → POST /api/rep-commentary → narrator_log (source=rep_analysis). form-critic / safety / narrator endpoints return 404 — those tables stay empty.",
     );
@@ -395,6 +416,7 @@ export default function SessionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           patient_id: activeProfile.id,
+          session_id: sessionIdRef.current,
           exercise_name: currentExercise.name,
           rep_number: newRep,
           set_number: currentSet,
@@ -571,6 +593,7 @@ export default function SessionPage() {
 
     try {
       const result = await saveSession({
+        id: sessionIdRef.current ?? undefined,
         patient_id: activeProfile.id,
         plan_id: null,
         started_at: startedAt,
@@ -580,7 +603,9 @@ export default function SessionPage() {
         exercises: exerciseRows,
         summary: null,
       });
-      logVeroOk(`✅ Session persisted`, result);
+      logVeroOk(
+        `✅ Session ${sessionIdRef.current ? "finalized" : "persisted (created)"} — id=${result.id}`,
+      );
 
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });

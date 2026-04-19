@@ -61,6 +61,12 @@ export async function listSessions(patientId: string): Promise<SessionRecord[]> 
 }
 
 interface SaveSessionInput {
+  /**
+   * If present, finalize an existing session (created at start via
+   * startSession()) instead of creating a new one. Ensures rep_commentary
+   * rows written mid-workout stay linked by session_id.
+   */
+  id?: string;
   patient_id: string;
   plan_id?: string | null;
   started_at: string;
@@ -78,6 +84,23 @@ export async function saveSession(input: SaveSessionInput): Promise<{ id: string
     body: JSON.stringify(input),
   });
   return asJson<{ id: string }>(res);
+}
+
+/**
+ * Create an empty session row at workout start. Returns the row's UUID so
+ * subsequent per-rep writes can reference it via session_id.
+ */
+export async function startSession(input: {
+  patient_id: string;
+  plan_id?: string | null;
+  pain_pre?: number | null;
+}): Promise<{ id: string; started_at: string | null }> {
+  const res = await fetch("/api/sessions/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return asJson<{ id: string; started_at: string | null }>(res);
 }
 
 // --- Auth ---
