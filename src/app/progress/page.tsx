@@ -12,6 +12,7 @@ import {
   setActivePatientId,
   deleteSession,
 } from "@/lib/api";
+import { focusForSession } from "@/lib/focusFromExercises";
 
 function buildFormQualityData(sessions: SessionRecord[]): ChartDataPoint[] {
   return sessions.map((s) => ({
@@ -105,19 +106,19 @@ export default function ProgressPage() {
   }
 
   // All focus tags present in this patient's history, in insertion order.
-  // Drives the filter pill row and the program label header.
+  // Drives the filter pill row and the program label header. Resolves
+  // via focusForSession so historical sessions missing summary.focus fall
+  // back to their exercise-derived region.
   const focuses = Array.from(
     new Set(
       sessions
-        .map((s) => (s.summary as { focus?: string } | null)?.focus)
+        .map((s) => focusForSession(s))
         .filter((f): f is string => typeof f === "string" && f.length > 0),
     ),
   );
 
   const filteredSessions = activeFocus
-    ? sessions.filter(
-        (s) => (s.summary as { focus?: string } | null)?.focus === activeFocus,
-      )
+    ? sessions.filter((s) => focusForSession(s) === activeFocus)
     : sessions;
 
   const hasSessions = filteredSessions.length > 0;
@@ -330,7 +331,7 @@ export default function ProgressPage() {
             </h3>
             <div className="flex flex-col gap-2">
               {[...filteredSessions].reverse().map((s) => {
-                const focus = (s.summary as { focus?: string } | null)?.focus ?? null;
+                const focus = focusForSession(s);
                 const isDeleting = deletingId === s.id;
                 return (
                 <Link

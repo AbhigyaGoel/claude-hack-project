@@ -1,4 +1,5 @@
 import exercises from "@/data/exercises.json";
+import type { SessionRecord } from "@/types/storage";
 
 interface LibraryEntry {
   id: string;
@@ -9,6 +10,19 @@ const LIBRARY = exercises as LibraryEntry[];
 const REGION_BY_ID: Record<string, string> = {};
 for (const ex of LIBRARY) {
   if (ex.body_region) REGION_BY_ID[ex.id] = ex.body_region;
+}
+
+/**
+ * Read-time focus resolver for any session. Prefers the persisted
+ * `summary.focus` if it's present (that's what new sessions write at save
+ * time); otherwise derives one from the session's recorded exercises so
+ * historical sessions — saved before focus-tagging shipped — still
+ * surface in the home picker and the progress filter.
+ */
+export function focusForSession(session: SessionRecord): string | null {
+  const stored = (session.summary as { focus?: string } | null)?.focus;
+  if (typeof stored === "string" && stored.length > 0) return stored;
+  return deriveFocusFromExercises(session.exercises.map((e) => e.exercise_id));
 }
 
 /**
