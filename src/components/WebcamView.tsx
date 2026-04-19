@@ -10,12 +10,14 @@ import type { Landmark, JointColorMap } from "@/types/landmark";
 
 interface WebcamViewProps {
   onLandmarksDetected?: (landmarks: Landmark[], angles: Record<string, number>) => void;
+  onVideoReady?: (video: HTMLVideoElement) => void;
   jointColors?: JointColorMap;
   showAngles?: boolean;
 }
 
 export default function WebcamView({
   onLandmarksDetected,
+  onVideoReady,
   jointColors,
   showAngles = false,
 }: WebcamViewProps) {
@@ -116,6 +118,7 @@ export default function WebcamView({
 
         video.srcObject = stream;
         await video.play();
+        onVideoReady?.(video);
 
         const landmarker = await initializePoseLandmarker();
         if (cancelled) {

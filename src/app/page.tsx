@@ -1,6 +1,17 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import type { StoredProfile } from "@/types/storage";
+import { getActiveProfile } from "@/lib/storage";
 
 export default function Home() {
+  const [profile, setProfile] = useState<StoredProfile | null>(null);
+
+  useEffect(() => {
+    setProfile(getActiveProfile());
+  }, []);
+
   return (
     <main className="flex-1 flex items-center justify-center relative overflow-hidden">
       {/* Background radial glow */}
@@ -38,14 +49,30 @@ export default function Home() {
         <p className="text-sm font-medium tracking-[0.2em] uppercase mb-6" style={{ color: "var(--color-accent)" }}>
           AI Physical Therapy
         </p>
-        <p className="text-lg font-light leading-relaxed mb-12" style={{ color: "var(--color-text-secondary)" }}>
+        <p className="text-lg font-light leading-relaxed mb-8" style={{ color: "var(--color-text-secondary)" }}>
           Real-time pose estimation, personalized exercise programming,
           and adaptive coaching — all in your browser.
         </p>
 
+        {/* Active profile badge */}
+        {profile && (
+          <div className="mb-8 inline-flex items-center gap-2 px-4 py-2 rounded-full" style={{
+            background: "var(--color-surface-raised)",
+            border: "1px solid var(--color-border)",
+          }}>
+            <div className="w-2 h-2 rounded-full" style={{ background: "var(--color-success)" }} />
+            <span className="text-sm" style={{ color: "var(--color-text-primary)" }}>
+              {profile.name}
+            </span>
+            <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              · {profile.session_count} session{profile.session_count !== 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
+
         <div className="flex gap-4 justify-center">
           <Link href="/session" className="btn-accent text-base">
-            Start Session
+            {profile ? `Start Session #${profile.session_count + 1}` : "Start Session"}
           </Link>
           <Link href="/progress" className="btn-ghost text-base">
             View Progress
