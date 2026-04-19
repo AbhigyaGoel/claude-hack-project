@@ -31,10 +31,8 @@ export default function ExerciseGuide({
       {/* Exercise demonstration */}
       <ExerciseDemo
         exerciseId={exercise.id}
-        exerciseName={exercise.name}
-        bodyRegion={"body_region" in exercise ? (exercise as Record<string, unknown>).body_region as string : undefined}
-        category={"category" in exercise ? (exercise as Record<string, unknown>).category as string : undefined}
         targetAngles={exercise.target_angles}
+        primaryJointAngle={Object.keys(exercise.target_angles)[0]}
       />
 
       {/* Live instruction */}
