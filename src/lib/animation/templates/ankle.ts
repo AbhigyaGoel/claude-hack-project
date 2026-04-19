@@ -16,102 +16,141 @@ function rotateJointsAround(
   }
 }
 
-const LEFT_FOOT = [29, 31];
-const RIGHT_FOOT = [30, 32];
-
 /**
- * Calf raise: standing, whole body rises on toes.
- * Used for: calf_raise_standing, single_leg_calf_raise, calf_raise_seated
+ * Calf raise: standing, rise up on toes (plantarflexion), lifting heels
+ * as high as possible. Then lower back down slowly. Whole body shifts up.
+ * Toes stay planted on the ground.
  */
 export const calfRaise: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [27, 28],
-  description: "Standing calf raise (rise on toes)",
+  activeJoints: [27, 28, 29, 30],
+  description: "Standing calf raise — rise up on toes",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
     const lift = easeInOutSine(t) * 0.05;
-    // Lift everything except feet (heels lift, toes stay)
+
+    // Everything from head to ankles lifts upward (toes stay planted)
     for (let i = 0; i <= 28; i++) {
-      // Skip foot index landmarks (29-32)
       pose[i] = { ...pose[i], y: pose[i].y - lift };
     }
-    // Heels lift more than toes
-    pose[29] = { ...pose[29], y: pose[29].y - lift * 0.8 };
-    pose[30] = { ...pose[30], y: pose[30].y - lift * 0.8 };
-    // Toe landmarks stay mostly planted
-    pose[31] = { ...pose[31], y: pose[31].y - lift * 0.2 };
-    pose[32] = { ...pose[32], y: pose[32].y - lift * 0.2 };
+
+    // Heels lift significantly (they come off the ground)
+    pose[29] = { ...pose[29], y: pose[29].y - lift * 0.7 };
+    pose[30] = { ...pose[30], y: pose[30].y - lift * 0.7 };
+
+    // Toe/foot index landmarks stay mostly on the ground
+    pose[31] = { ...pose[31], y: pose[31].y - lift * 0.15 };
+    pose[32] = { ...pose[32], y: pose[32].y - lift * 0.15 };
+
     return pose;
   },
 };
 
 /**
- * Dorsiflexion: foot flexes upward (ankle angle decreases).
- * Used for: dorsiflexion_stretch_wall, dorsiflexion_band, ankle_dorsiflexion_active
+ * Dorsiflexion stretch: standing facing wall, one foot back. Lean into wall,
+ * bending front ankle to stretch the calf. The front knee moves forward over the toes.
+ * Side view.
  */
 export const dorsiflexion: MovementTemplate = {
   basePose: "standingSide",
-  activeJoints: [28, 30, 32],
-  description: "Foot flexes upward (dorsiflexion)",
+  activeJoints: [26, 28, 30, 32],
+  description: "Wall dorsiflexion stretch — front knee moves forward over toes",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standingSide"));
     const t2 = easeInOutSine(t);
-    // Rotate foot landmarks upward around ankle
-    const angle = t2 * -20;
-    rotateJointsAround(pose, 28, [30, 32], angle);
-    rotateJointsAround(pose, 27, [29, 31], angle);
+
+    // Set up staggered stance: front foot (right) forward, back foot (left) behind
+    // Front ankle stays planted, knee drives forward
+    // Back leg is extended behind for the stretch position
+
+    // Back leg (left) steps back
+    pose[25] = { ...pose[25], x: pose[25].x - 0.08 };
+    pose[27] = { ...pose[27], x: pose[27].x - 0.12 };
+    pose[29] = { ...pose[29], x: pose[29].x - 0.12 };
+    pose[31] = { ...pose[31], x: pose[31].x - 0.10 };
+
+    // Animation: front knee drives forward (ankle dorsiflexion)
+    // Knee moves forward (increasing x) over the toes
+    const kneeDrive = t2 * 0.06;
+    pose[26] = { ...pose[26], x: pose[26].x + kneeDrive, y: pose[26].y + kneeDrive * 0.3 };
+
+    // Whole body leans forward slightly
+    const lean = t2 * 0.02;
+    for (let i = 0; i <= 24; i++) {
+      pose[i] = { ...pose[i], x: pose[i].x + lean };
+    }
+
+    // Arms reach forward to the wall
+    pose[14] = { ...pose[14], x: pose[14].x + 0.08, y: pose[14].y - 0.05 };
+    pose[16] = { ...pose[16], x: pose[16].x + 0.12, y: pose[16].y - 0.10 };
+
     return pose;
   },
 };
 
 /**
- * Ankle circle: foot traces a circle pattern.
- * Used for: ankle_alphabet, ankle_circle, baps_board
+ * Ankle circle: seated or lying. Foot traces circles in the air —
+ * point, rotate outward, flex up, rotate inward. Continuous circular motion.
  */
 export const ankleCircle: MovementTemplate = {
   basePose: "seated",
   activeJoints: [27, 29, 31],
-  description: "Foot traces a circle (ankle circles)",
+  description: "Seated ankle circles — foot traces a circle",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("seated"));
-    // Circle the left foot around the ankle
+
+    // Left foot circles around the ankle joint
+    // t goes 0->1 continuously, creating a full circle
     const angle = t * Math.PI * 2;
-    const radius = 0.03;
+    const radius = 0.035;
     const dx = Math.cos(angle) * radius;
     const dy = Math.sin(angle) * radius;
-    // Move foot tips in a circle
+
+    // Move heel and toe landmarks in a circle
     pose[29] = { ...pose[29], x: pose[29].x + dx, y: pose[29].y + dy };
     pose[31] = { ...pose[31], x: pose[31].x + dx, y: pose[31].y + dy };
+
+    // Ankle shifts slightly to show foot movement
+    pose[27] = { ...pose[27], x: pose[27].x + dx * 0.3, y: pose[27].y + dy * 0.3 };
+
     return pose;
   },
 };
 
 /**
- * Single leg balance: standing on one leg with gentle sway.
- * Used for: single_leg_balance, single_leg_balance_eyes_closed
+ * Single leg balance: standing on one foot. Other foot lifts off ground.
+ * Gentle sway is natural. Arms can be out for balance.
  */
 export const singleLegBalance: MovementTemplate = {
   basePose: "standing",
-  activeJoints: [27, 25, 23],
-  description: "Single leg balance with gentle sway",
+  activeJoints: [25, 26, 27, 28],
+  description: "Single leg balance — stand on one foot with gentle sway",
   animate: (_basePose, t) => {
     const pose = clonePose(getBasePose("standing"));
-    const t2 = easeInOutSine(t);
-    // Lift right leg slightly off the ground
-    const liftLeg = 0.08;
-    pose[26] = { ...pose[26], y: pose[26].y - liftLeg, x: pose[26].x + 0.02 };
-    pose[28] = { ...pose[28], y: pose[28].y - liftLeg, x: pose[28].x + 0.03 };
-    pose[30] = { ...pose[30], y: pose[30].y - liftLeg, x: pose[30].x + 0.03 };
-    pose[32] = { ...pose[32], y: pose[32].y - liftLeg, x: pose[32].x + 0.03 };
-    // Bend right knee
-    const kneeAngle = -30;
-    rotateJointsAround(pose, 26, [28, 30, 32], kneeAngle);
 
-    // Gentle body sway
-    const sway = Math.sin(t * Math.PI * 4) * 0.008;
+    // Lift right leg off the ground — knee bends, foot lifts
+    // Static lift position
+    const liftAmount = 0.08;
+    pose[26] = { ...pose[26], y: pose[26].y - liftAmount, x: pose[26].x + 0.02 };
+    pose[28] = { ...pose[28], y: pose[28].y - liftAmount, x: pose[28].x + 0.03 };
+    pose[30] = { ...pose[30], y: pose[30].y - liftAmount, x: pose[30].x + 0.03 };
+    pose[32] = { ...pose[32], y: pose[32].y - liftAmount, x: pose[32].x + 0.03 };
+
+    // Bend the lifted knee slightly
+    rotateJointsAround(pose, 26, [28, 30, 32], -25);
+
+    // Arms out slightly for balance
+    pose[13] = { ...pose[13], x: pose[13].x - 0.03 };
+    pose[15] = { ...pose[15], x: pose[15].x - 0.04 };
+    pose[14] = { ...pose[14], x: pose[14].x + 0.03 };
+    pose[16] = { ...pose[16], x: pose[16].x + 0.04 };
+
+    // Gentle body sway (natural balance challenge)
+    const sway = Math.sin(t * Math.PI * 4) * 0.006;
     for (let i = 0; i <= 24; i++) {
       pose[i] = { ...pose[i], x: pose[i].x + sway };
     }
+
     return pose;
   },
 };
