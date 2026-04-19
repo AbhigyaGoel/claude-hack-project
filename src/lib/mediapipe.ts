@@ -9,6 +9,14 @@ let lastTimestamp = -1;
 export async function initializePoseLandmarker(): Promise<PoseLandmarker> {
   if (cachedLandmarker) return cachedLandmarker;
 
+  // TFLite WASM emits "INFO: Created TensorFlow Lite XNNPACK delegate for CPU."
+  // via console.error — suppress it so Next.js dev overlay doesn't flag it.
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].startsWith("INFO:")) return;
+    originalError.apply(console, args);
+  };
+
   const vision = await FilesetResolver.forVisionTasks(WASM_CDN);
 
   cachedLandmarker = await PoseLandmarker.createFromOptions(vision, {
@@ -19,6 +27,8 @@ export async function initializePoseLandmarker(): Promise<PoseLandmarker> {
     runningMode: "VIDEO",
     numPoses: 1,
   });
+
+  console.error = originalError;
 
   return cachedLandmarker;
 }
