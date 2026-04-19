@@ -197,7 +197,13 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex flex-col gap-6">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div
+              className={
+                focuses.length === 0
+                  ? "flex justify-center"
+                  : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+              }
+            >
               {focuses.map((f) => {
                 const color = focusColor(f.focus);
                 return (
@@ -232,7 +238,9 @@ export default function Home() {
 
               <Link
                 href="/session?new=1"
-                className="glass-card p-5 text-left hover:border-[var(--color-border-bright)] transition-colors flex flex-col justify-center"
+                className={`glass-card p-5 text-left hover:border-[var(--color-border-bright)] transition-colors flex flex-col justify-center${
+                  focuses.length === 0 ? " w-full max-w-sm" : ""
+                }`}
                 style={{ borderLeft: "3px dashed var(--color-accent)" }}
               >
                 <div
