@@ -29,6 +29,41 @@ function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+// --- Telemetry helpers ---
+// All exercise-loop events log through here with a [VERO] prefix so you can
+// filter the DevTools console while doing a workout. Each log line maps to a
+// specific Supabase table write (or a write that's expected but not wired yet).
+//
+// Tables written during the exercise loop:
+//   ✓ narrator_log      (via /api/rep-commentary, one row per rep)
+//   ✓ sessions, sets    (via /api/sessions POST at workout end)
+//   ~ rep_analyses      (written inside /api/sessions if faults provided)
+//   ✗ form_events       (no endpoint; route dir empty)
+//   ✗ red_flags         (no endpoint; route dir empty)
+function logVero(msg: string, data?: unknown) {
+  if (data !== undefined) {
+    console.log(`[VERO] ${msg}`, data);
+  } else {
+    console.log(`[VERO] ${msg}`);
+  }
+}
+
+function logVeroOk(msg: string, data?: unknown) {
+  if (data !== undefined) {
+    console.log(`%c[VERO ✓] ${msg}`, "color: #22c55e", data);
+  } else {
+    console.log(`%c[VERO ✓] ${msg}`, "color: #22c55e");
+  }
+}
+
+function logVeroWarn(msg: string, data?: unknown) {
+  if (data !== undefined) {
+    console.warn(`[VERO ⚠] ${msg}`, data);
+  } else {
+    console.warn(`[VERO ⚠] ${msg}`);
+  }
+}
+
 const WebcamView = lazy(() => import("@/components/WebcamView"));
 
 function WebcamLoading() {
@@ -67,6 +102,7 @@ export default function SessionPage() {
   const [liveIntakeResponses, setLiveIntakeResponses] = useState<Record<string, string>>({});
   const [step, setStep] = useState<SessionStep>("loading");
   const [activeProfile, setActiveProfile] = useState<PatientRecord | null>(null);
+  const [commentaryEntries, setCommentaryEntries] = useState<Array<{ id: string; text: string }>>([]);
   const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
   const [plan, setPlan] = useState<ExercisePlan | null>(null);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -111,14 +147,20 @@ export default function SessionPage() {
           rep_data: { peak_angle: peakAngle, rep_number: repNum },
         }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        logVeroWarn(`form-critic returned ${res.status} — endpoint not wired (rep_analyses will stay empty)`);
+        return;
+      }
       const data = await res.json();
       if (data.faults?.length > 0) {
+        logVeroOk(`form-critic: ${data.faults.length} fault(s) detected`, data.faults);
         setFormCriticFaults(data.faults.map((f: { description?: string; type?: string }) => f.description || f.type || ""));
       } else {
         setFormCriticFaults([]);
       }
-    } catch { /* non-blocking */ }
+    } catch (err) {
+      logVeroWarn("form-critic fetch threw", err);
+    }
   }, []);
 
   /** Safety Monitor: check for red flags via Haiku — runs on vision frames */
@@ -132,13 +174,19 @@ export default function SessionPage() {
           frame_base64: frameBase64,
         }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        logVeroWarn(`safety-monitor returned ${res.status} — endpoint not wired (red_flags will stay empty)`);
+        return;
+      }
       const data = await res.json();
       if (data.halt) {
+        logVeroWarn("safety-monitor flagged HALT", data);
         setSafetyHalt(data.red_flag_type || "Red flag detected");
         setStep("summary");
       }
-    } catch { /* non-blocking */ }
+    } catch (err) {
+      logVeroWarn("safety-monitor fetch threw", err);
+    }
   }, []);
 
   /** Clinical Narrator: stream reasoning to side panel after each rep */
@@ -155,6 +203,10 @@ export default function SessionPage() {
           rep_data: { rep_number: repNum, peak_angle: peakAngle, quality },
         }),
       });
+      if (!res.ok) {
+        logVeroWarn(`narrator returned ${res.status} — streaming endpoint not wired (narrator_log not written via this path)`);
+        return;
+      }
       if (!res.body) return;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -289,6 +341,13 @@ export default function SessionPage() {
     repQualitiesRef.current = [[]];
     peakAnglesRef.current = [];
     repsPerSetRef.current = [];
+    setCommentaryEntries([]);
+    logVero(
+      `▶ Session starting — patient=${activeProfile?.id ?? "?"} exercise=${currentExercise?.name ?? "?"} pain_pre=${value}`,
+    );
+    logVero(
+      "During the workout: each rep → POST /api/rep-commentary → narrator_log (source=rep_analysis). form-critic / safety / narrator endpoints return 404 — those tables stay empty.",
+    );
     setStep("exercising");
   }
 
@@ -318,10 +377,58 @@ export default function SessionPage() {
       peakAnglesRef.current[currentExerciseIndex][key] = Math.max(prev, peakAngleRef.current);
     }
 
-    // Fire agents (non-blocking)
+    // Fire agents (non-blocking).
     const savedPeak = peakAngleRef.current;
+    logVero(
+      `Rep ${newRep} complete · ${currentExercise.name} · peak=${savedPeak.toFixed(1)}° target=${Math.round(targetAngle)}° · quality=${quality}`,
+    );
     callFormCritic(currentExercise, savedPeak, newRep);
     callNarrator(currentExercise, newRep, quality, savedPeak);
+
+    // Also persist one-sentence rep commentary for chat memory/RAG.
+    if (activeProfile) {
+      const fetchId = `rep_${Date.now()}`;
+      const t0 = performance.now();
+      logVero(`🧠 Asking Claude for PT note (rep ${newRep})...`);
+      fetch("/api/rep-commentary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patient_id: activeProfile.id,
+          exercise_name: currentExercise.name,
+          rep_number: newRep,
+          set_number: currentSet,
+          peak_angle: savedPeak,
+          target_angle: targetAngle,
+          quality,
+          t_ms: Date.now() - sessionStartRef.current,
+        }),
+      })
+        .then(async (r) => {
+          const ms = Math.round(performance.now() - t0);
+          if (!r.ok) {
+            logVeroWarn(`rep-commentary ${r.status} after ${ms}ms — narrator_log NOT written`);
+            return null;
+          }
+          const data = await r.json();
+          if (data?.commentary) {
+            logVeroOk(
+              `📝 Wrote narrator_log row (rep ${newRep}, ${ms}ms): "${data.commentary}"`,
+            );
+          } else {
+            logVeroWarn(`rep-commentary returned empty commentary (${ms}ms)`);
+          }
+          return data;
+        })
+        .then((data) => {
+          if (data?.commentary) {
+            setCommentaryEntries((prev) => [...prev.slice(-4), { id: fetchId, text: data.commentary }]);
+          }
+        })
+        .catch((err) => {
+          logVeroWarn("rep-commentary fetch threw", err);
+        });
+    }
 
     // Reset
     peakAngleRef.current = 0;
@@ -458,8 +565,12 @@ export default function SessionPage() {
       }
     });
 
+    logVero(
+      `🏁 Session ending — persisting 1 session row + ${exerciseRows.length} set row(s) to Supabase...`,
+    );
+
     try {
-      await saveSession({
+      const result = await saveSession({
         patient_id: activeProfile.id,
         plan_id: null,
         started_at: startedAt,
@@ -469,11 +580,27 @@ export default function SessionPage() {
         exercises: exerciseRows,
         summary: null,
       });
+      logVeroOk(`✅ Session persisted`, result);
 
       const fresh = await listSessions(activeProfile.id);
       setActiveProfile({ ...activeProfile, session_count: fresh.length });
-    } catch {
-      // Persistence failure is non-fatal for the in-memory summary view.
+
+      // Coverage summary — what actually made it to Supabase.
+      const totalReps = repQualitiesRef.current.flat().length;
+      console.log(
+        "%c[VERO] — Session coverage summary —",
+        "color: #38bdc3; font-weight: bold",
+      );
+      console.table({
+        "sessions row": "✓ 1 written",
+        "sets rows": `✓ ${exerciseRows.length} written`,
+        "narrator_log rows (rep notes)": `✓ ~${totalReps} written (one per rep via rep-commentary)`,
+        "rep_analyses rows": "~ only if faults provided in /api/sessions payload (currently none)",
+        "form_events rows": "✗ 0 — /api/form-critic endpoint not wired",
+        "red_flags rows": "✗ 0 — /api/safety-monitor endpoint not wired",
+      });
+    } catch (err) {
+      logVeroWarn("session persistence FAILED — sessions/sets NOT written", err);
     }
   }
 
@@ -640,26 +767,99 @@ export default function SessionPage() {
               Your Exercise Plan
             </h2>
             <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>
-              Session {plan.session_number} · ~{plan.estimated_duration_minutes} min · {plan.exercises.length} exercises
+              Session {plan.session_number} · ~{plan.estimated_duration_minutes} min · {plan.exercises.length} exercises · drag to reorder
             </p>
 
             <div className="flex flex-col gap-2 mb-6">
               {plan.exercises.map((ex, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}>
+                <div
+                  key={ex.id}
+                  draggable
+                  onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+                    if (from === i) return;
+                    setPlan((prev) => {
+                      if (!prev) return prev;
+                      const exs = [...prev.exercises];
+                      const [moved] = exs.splice(from, 1);
+                      exs.splice(i, 0, moved);
+                      return { ...prev, exercises: exs };
+                    });
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-xl cursor-grab active:cursor-grabbing"
+                  style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)" }}
+                >
+                  {/* Drag handle */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" strokeLinecap="round" className="shrink-0 opacity-40">
+                    <circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/>
+                    <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
+                    <circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/>
+                  </svg>
                   <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0" style={{ background: "var(--color-accent-dim)", color: "var(--color-accent)" }}>
                     {i + 1}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate" style={{ color: "var(--color-text-primary)" }}>{ex.name}</div>
-                    <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                      {ex.sets} sets × {ex.reps} reps · {ex.tempo_seconds} tempo
+                    <div className="text-sm font-medium truncate mb-1.5" style={{ color: "var(--color-text-primary)" }}>{ex.name}</div>
+                    <div className="flex items-center gap-3">
+                      {/* Sets stepper */}
+                      <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, sets: Math.max(1, x.sets - 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >−</button>
+                        <span className="text-xs font-mono w-12 text-center" style={{ color: "var(--color-text-secondary)" }}>{ex.sets} sets</span>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, sets: Math.min(10, x.sets + 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >+</button>
+                      </div>
+                      <span className="text-xs" style={{ color: "var(--color-border)" }}>×</span>
+                      {/* Reps stepper */}
+                      <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, reps: Math.max(1, x.reps - 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >−</button>
+                        <span className="text-xs font-mono w-12 text-center" style={{ color: "var(--color-text-secondary)" }}>{ex.reps} reps</span>
+                        <button
+                          draggable={false}
+                          onClick={(e) => { e.stopPropagation(); setPlan((prev) => { if (!prev) return prev; const exs = prev.exercises.map((x, j) => j === i ? { ...x, reps: Math.min(50, x.reps + 1) } : x); return { ...prev, exercises: exs }; }); }}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-colors"
+                          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", cursor: "pointer" }}
+                        >+</button>
+                      </div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setPlan((prev) => prev ? { ...prev, exercises: prev.exercises.filter((_, j) => j !== i) } : prev)}
+                    className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 opacity-40 hover:opacity-100"
+                    style={{ background: "transparent", border: "1px solid transparent", color: "var(--color-danger)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-danger-dim)"; e.currentTarget.style.borderColor = "var(--color-danger)"; e.currentTarget.style.opacity = "1"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.opacity = "0.4"; }}
+                    title="Remove exercise"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
                 </div>
               ))}
             </div>
 
-            <button onClick={() => setStep("pre_pain")} className="btn-accent w-full">
+            <button
+              onClick={() => setStep("pre_pain")}
+              disabled={plan.exercises.length === 0}
+              className="btn-accent w-full"
+            >
               Start Session
             </button>
           </div>
@@ -783,6 +983,34 @@ export default function SessionPage() {
               targetAngle={Object.values(currentExercise.target_angles)[0]}
               phase={movementPhase}
             />
+            {commentaryEntries.length > 0 && (
+              <div className="glass-card p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <div
+                    className="w-2 h-2 rounded-full animate-pulse"
+                    style={{ background: "var(--color-accent)" }}
+                  />
+                  <span
+                    className="text-xs font-medium uppercase tracking-wide"
+                    style={{ color: "var(--color-accent)" }}
+                  >
+                    PT Notes
+                  </span>
+                </div>
+                {commentaryEntries.slice(-3).map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="text-xs leading-relaxed p-2 rounded-lg"
+                    style={{
+                      background: "var(--color-surface-raised)",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    {entry.text}
+                  </div>
+                ))}
+              </div>
+            )}
             <button
               onClick={skipExercise}
               className="btn-ghost text-xs w-full"
