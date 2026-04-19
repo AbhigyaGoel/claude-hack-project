@@ -63,6 +63,12 @@ With an 800ms minimum duration filter to reject noise.
 
 **Network issues.** UCLA's campus network blocks Supabase Postgres ports (5432/6543). We lost time diagnosing before switching to a phone hotspot.
 
+**Claude text and ElevenLabs TTS.** Keeping spoken coaching aligned with what Claude generated meant juggling latency, streaming text, and the ElevenLabs API: when to start audio, how to cancel or replace overlapping speech, and how to avoid the voice saying something the model had already revised. Small timing bugs felt like big UX failures.
+
+**Database schema churn.** We started with a rough schema and kept evolving it as features landed (sessions, SOAP fields, narrator logs, patient memory). Each shift meant migrations, RLS policies, and fixing queries that assumed yesterday's columns. The app and DB were in constant negotiation.
+
+**Version control and keys (classic hackathon).** Divergent branches, stash-and-rebase loops, and "works on my machine" moments were part of the weekend. On top of that, we had to keep Anthropic, ElevenLabs, and Supabase credentials consistent across `.env`, deployment, and teammates' machines so nothing silently failed in demo.
+
 ## Accomplishments that we're proud of
 
 - **The SOAP pipeline actually works.** Observer $\to$ Reasoner $\to$ Coach produces clinically coherent notes that flow from objective observation through assessment to plan, the same structure real PTs use in their documentation.

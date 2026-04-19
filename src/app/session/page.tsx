@@ -773,8 +773,54 @@ export default function SessionPage() {
     }
   }
 
+  function loadDemoPreset() {
+    setPlan((prev) => ({
+      session_number: prev?.session_number ?? 1,
+      estimated_duration_minutes: 10,
+      exercises: [
+        {
+          id: "wall_slide_01",
+          name: "Wall Slide",
+          target_muscles: ["lower_trapezius", "serratus_anterior"],
+          target_angles: { shoulder_flexion_degrees: 120, elbow_extension_degrees: 170 },
+          tolerances: { shoulder_flexion_degrees: 15, elbow_extension_degrees: 15 },
+          tempo_seconds: "3-1-2-0",
+          sets: 1,
+          reps: 3,
+          rest_seconds: 60,
+          cues: ["Squeeze shoulder blades down and back", "Slide pinky side of hand up the wall", "Keep ribs down — don't arch your back"],
+          compensation_patterns: [
+            { name: "scapular_elevation", detection: "shoulder landmark y decreases relative to ear landmark y by >2cm during flexion", landmarks: [11, 7], severity: "yellow" },
+            { name: "lumbar_extension", detection: "hip landmark moves anterior >3cm during overhead reach", landmarks: [23, 11], severity: "red" },
+          ],
+          regression: "Reduce ROM to pain-free range",
+          progression: "Add 1lb wrist weight",
+        },
+        {
+          id: "shoulder_abduction_standing_01",
+          name: "Standing Shoulder Abduction",
+          target_muscles: ["middle_deltoid", "supraspinatus"],
+          target_angles: { shoulder_abduction_degrees: 70 },
+          tolerances: { shoulder_abduction_degrees: 15 },
+          tempo_seconds: "3-1-3-0",
+          sets: 1,
+          reps: 3,
+          rest_seconds: 60,
+          cues: ["Lift arm out to the side, thumb pointing up", "Stop at shoulder height", "Lower slowly with control"],
+          compensation_patterns: [
+            { name: "scapular_hiking", detection: "shoulder elevates toward ear during abduction", landmarks: [11, 7], severity: "yellow" },
+            { name: "trunk_lateral_lean", detection: "trunk leans away from lifting arm", landmarks: [11, 23, 12, 24], severity: "red" },
+          ],
+          regression: "Reduce ROM to 60 degrees",
+          progression: "Increase weight by 1lb",
+        },
+      ],
+    }));
+  }
+
   async function handlePostPain(value: number) {
     setPainPost(value);
+    setStep("loading");
     const savedId = await persistSession(value);
     // Route straight into the report. The report page renders a
     // "Generating session report..." loader while /api/report is running,
@@ -1074,9 +1120,17 @@ export default function SessionPage() {
       {step === "plan_review" && plan && (
         <div className="flex-1 flex items-center justify-center animate-fade-in overflow-y-auto py-4">
           <div className="glass-card-bright p-8 max-w-lg w-full">
-            <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
-              Your Exercise Plan
-            </h2>
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                Your Exercise Plan
+              </h2>
+              <button
+                onClick={loadDemoPreset}
+                className="text-xs text-zinc-500 hover:text-zinc-400 transition-colors mt-1"
+              >
+                load demo preset
+              </button>
+            </div>
             <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>
               Session {plan.session_number} · ~{plan.estimated_duration_minutes} min · {plan.exercises.length} exercises · drag to reorder
             </p>
