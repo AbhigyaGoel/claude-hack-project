@@ -122,7 +122,7 @@ export async function POST() {
         tools: [],
         toolHandlers: {},
         maxTokens: 4096,
-        thinking: { type: "enabled", budget_tokens: 8000 },
+        thinking: { type: "adaptive", budget_tokens: 8000 },
       });
 
       let analysis;
