@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import ProgressChart from "@/components/ProgressChart";
-import type { ChartDataPoint } from "@/agents/progressAnalyst";
+import type { ChartDataPoint } from "@/components/ProgressChart";
 
 interface ReportSection {
   heading: string;
