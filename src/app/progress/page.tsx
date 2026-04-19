@@ -10,6 +10,7 @@ import {
   listSessions,
   getActivePatientId,
   setActivePatientId,
+  deleteSession,
 } from "@/lib/api";
 
 function buildFormQualityData(sessions: SessionRecord[]): ChartDataPoint[] {
@@ -44,6 +45,30 @@ export default function ProgressPage() {
   const [selectedProfile, setSelectedProfile] = useState<PatientRecord | null>(null);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  // Active focus filter. `null` means "All" — show every session. Any other
+  // value narrows charts + totals + the list to sessions tagged with that
+  // focus via `summary.focus`.
+  const [activeFocus, setActiveFocus] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string, e: React.MouseEvent) {
+    // Stop the click from navigating to the session's report.
+    e.preventDefault();
+    e.stopPropagation();
+    if (deletingId) return;
+    if (!window.confirm("Delete this session? This cannot be undone.")) return;
+
+    setDeletingId(id);
+    const prev = sessions;
+    setSessions((s) => s.filter((x) => x.id !== id));
+    try {
+      await deleteSession(id);
+    } catch {
+      setSessions(prev);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -79,14 +104,57 @@ export default function ProgressPage() {
     setSessions(s);
   }
 
-  const hasSessions = sessions.length > 0;
-  const totalSessions = sessions.length;
+  // All focus tags present in this patient's history, in insertion order.
+  // Drives the filter pill row and the program label header.
+  const focuses = Array.from(
+    new Set(
+      sessions
+        .map((s) => (s.summary as { focus?: string } | null)?.focus)
+        .filter((f): f is string => typeof f === "string" && f.length > 0),
+    ),
+  );
+
+  const filteredSessions = activeFocus
+    ? sessions.filter(
+        (s) => (s.summary as { focus?: string } | null)?.focus === activeFocus,
+      )
+    : sessions;
+
+  const hasSessions = filteredSessions.length > 0;
+  const totalSessions = filteredSessions.length;
   const avgQuality = hasSessions
-    ? Math.round(sessions.reduce((sum, s) => sum + s.avg_form_quality, 0) / totalSessions)
+    ? Math.round(
+        filteredSessions.reduce((sum, s) => sum + s.avg_form_quality, 0) /
+          totalSessions,
+      )
     : 0;
-  const totalMinutes = sessions.reduce((sum, s) => sum + s.duration_minutes, 0);
-  const bodyRegion =
+  const totalMinutes = filteredSessions.reduce(
+    (sum, s) => sum + s.duration_minutes,
+    0,
+  );
+
+  const primaryRegion =
     selectedProfile?.profile?.diagnostic?.body_region ?? "general";
+  const programLabel = activeFocus
+    ? `${activeFocus} program`
+    : focuses.length > 1
+      ? `${focuses.join(" · ")} program`
+      : `${primaryRegion} program`;
+
+  const focusColor = (focus: string): string => {
+    switch (focus.toLowerCase()) {
+      case "knee":
+        return "#38bdc3";
+      case "shoulder":
+        return "#a78bfa";
+      case "lumbar":
+        return "#f97316";
+      case "integrated":
+        return "#22c55e";
+      default:
+        return "var(--color-text-muted)";
+    }
+  };
 
   return (
     <main className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto" style={{ background: "var(--color-background)" }}>
@@ -128,8 +196,46 @@ export default function ProgressPage() {
             {selectedProfile.name}
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-            {bodyRegion} program · {totalSessions} session{totalSessions !== 1 ? "s" : ""}
+            {programLabel} · {totalSessions} session{totalSessions !== 1 ? "s" : ""}
           </p>
+
+          {focuses.length > 1 && (
+            <div className="flex gap-2 mt-4 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setActiveFocus(null)}
+                className="text-xs uppercase tracking-wide px-3 py-1.5 rounded-full transition-colors"
+                style={{
+                  background: activeFocus === null
+                    ? "var(--color-accent-dim)"
+                    : "var(--color-surface-raised)",
+                  border: `1px solid ${activeFocus === null ? "var(--color-accent)" : "var(--color-border)"}`,
+                  color: activeFocus === null ? "var(--color-accent)" : "var(--color-text-secondary)",
+                }}
+              >
+                All
+              </button>
+              {focuses.map((f) => {
+                const active = activeFocus === f;
+                const color = focusColor(f);
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setActiveFocus(f)}
+                    className="text-xs uppercase tracking-wide px-3 py-1.5 rounded-full transition-colors"
+                    style={{
+                      background: active ? `${color}22` : "var(--color-surface-raised)",
+                      border: `1px solid ${active ? color : "var(--color-border)"}`,
+                      color: active ? color : "var(--color-text-secondary)",
+                    }}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -177,7 +283,7 @@ export default function ProgressPage() {
             </div>
             <div className="glass-card p-4 text-center">
               <div className="text-2xl font-semibold font-mono" style={{ color: "var(--color-text-primary)" }}>
-                {sessions.reduce((sum, s) => sum + s.total_reps, 0)}
+                {filteredSessions.reduce((sum, s) => sum + s.total_reps, 0)}
               </div>
               <div className="data-label mt-1">Total Reps</div>
             </div>
@@ -192,25 +298,25 @@ export default function ProgressPage() {
           {/* Charts */}
           <div className="grid grid-cols-2 gap-4">
             <ProgressChart
-              data={buildFormQualityData(sessions)}
+              data={buildFormQualityData(filteredSessions)}
               title="Form Quality (%)"
               yLabel="Quality %"
               color="#22c55e"
             />
             <ProgressChart
-              data={buildVolumeData(sessions)}
+              data={buildVolumeData(filteredSessions)}
               title="Volume (Total Reps)"
               yLabel="Reps"
               color="#3b82f6"
             />
             <ProgressChart
-              data={buildPainData(sessions, "pre")}
+              data={buildPainData(filteredSessions, "pre")}
               title="Pain Before Session"
               yLabel="Pain (0-10)"
               color="#ef4444"
             />
             <ProgressChart
-              data={buildPainData(sessions, "post")}
+              data={buildPainData(filteredSessions, "post")}
               title="Pain After Session"
               yLabel="Pain (0-10)"
               color="#f97316"
@@ -223,17 +329,36 @@ export default function ProgressPage() {
               Session History
             </h3>
             <div className="flex flex-col gap-2">
-              {[...sessions].reverse().map((s) => (
-                <div
+              {[...filteredSessions].reverse().map((s) => {
+                const focus = (s.summary as { focus?: string } | null)?.focus ?? null;
+                const isDeleting = deletingId === s.id;
+                return (
+                <Link
                   key={s.id}
-                  className="glass-card p-4 flex items-center justify-between"
+                  href={`/report/${s.id}`}
+                  className="group glass-card p-4 flex items-center justify-between hover:border-[var(--color-border-bright)] transition-colors cursor-pointer"
+                  style={{ opacity: isDeleting ? 0.4 : 1, pointerEvents: isDeleting ? "none" : undefined }}
                 >
-                  <div>
-                    <div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
-                      Session {s.session_number}
-                    </div>
-                    <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                      {s.date ? new Date(s.date).toLocaleDateString() : ""} · {s.duration_minutes}min · {s.exercises.length} exercises
+                  <div className="flex items-center gap-3">
+                    {focus && (
+                      <span
+                        className="text-[10px] uppercase tracking-wide px-2 py-1 rounded-full shrink-0"
+                        style={{
+                          background: "var(--color-surface-raised)",
+                          border: `1px solid ${focusColor(focus)}40`,
+                          color: focusColor(focus),
+                        }}
+                      >
+                        {focus}
+                      </span>
+                    )}
+                    <div>
+                      <div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+                        Session {s.session_number}
+                      </div>
+                      <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                        {s.date ? new Date(s.date).toLocaleDateString() : ""} · {s.duration_minutes}min · {s.exercises.length} exercises
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -253,9 +378,30 @@ export default function ProgressPage() {
                       </div>
                       <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>pain</div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(s.id, e)}
+                      disabled={isDeleting}
+                      aria-label={`Delete session ${s.session_number}`}
+                      title="Delete session"
+                      className="w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{
+                        background: "var(--color-surface-raised)",
+                        border: "1px solid var(--color-border)",
+                        color: "#ef4444",
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14M10 11v6M14 11v6"/>
+                      </svg>
+                    </button>
+                    <span className="text-[var(--color-text-muted)] text-lg" aria-hidden>
+                      &rsaquo;
+                    </span>
                   </div>
-                </div>
-              ))}
+                </Link>
+                );
+              })}
             </div>
           </div>
         </div>

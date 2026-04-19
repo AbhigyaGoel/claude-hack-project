@@ -150,18 +150,25 @@ function renderForLog(c: CoachOutput): string {
 }
 
 export async function POST(req: NextRequest) {
+  console.log("[progression-coach] POST received");
+
   const userId = await getCurrentUserId();
   if (!userId) {
+    console.warn("[progression-coach] no session cookie");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const body = (await req.json().catch(() => null)) as Payload | null;
   if (!body?.patient_id || !body.session_id) {
+    console.warn("[progression-coach] bad payload:", body);
     return NextResponse.json(
       { error: "patient_id and session_id required" },
       { status: 400 },
     );
   }
+  console.log(
+    `[progression-coach] patient=${body.patient_id} session=${body.session_id}`,
+  );
 
   const db = getDb();
 
@@ -171,6 +178,7 @@ export async function POST(req: NextRequest) {
     .where(and(eq(patients.id, body.patient_id), eq(patients.user_id, userId)))
     .limit(1);
   if (owned.length === 0) {
+    console.warn(`[progression-coach] patient ${body.patient_id} not owned by ${userId}`);
     return NextResponse.json({ error: "patient not found" }, { status: 404 });
   }
 
@@ -205,8 +213,12 @@ export async function POST(req: NextRequest) {
 
   const session = sessionRow[0];
   if (!session) {
+    console.warn(`[progression-coach] session ${body.session_id} not found in DB`);
     return NextResponse.json({ error: "session not found" }, { status: 404 });
   }
+  console.log(
+    `[progression-coach] gathered: sets=${thisSessionSets.length} commentary=${thisSessionCommentary.length} context=${patientContext.length}ch`,
+  );
 
   const setLines = thisSessionSets.map(
     (s) =>
@@ -277,49 +289,86 @@ export async function POST(req: NextRequest) {
     `Write the recap in plain language as specified. Output JSON only.`,
   ].join("\n");
 
+  // Truncate patient context defensively — Haiku takes a big prompt fine but
+  // ultra-long ones occasionally slow the response or lead to truncated JSON.
+  const trimmedContext = patientContext.slice(0, 6000);
+  const fullSystem = `${SYSTEM_PROMPT}\n\n# Patient Context\n${trimmedContext}`;
+
   const t0 = Date.now();
   let raw = "";
   try {
     raw = await callClaudeSimple({
       model: "claude-haiku-4-5-20251001",
-      system: SYSTEM_PROMPT,
-      systemParts: [SYSTEM_PROMPT, `\n\n# Patient Context\n${patientContext}`],
+      system: fullSystem,
       prompt: userPrompt,
       maxTokens: 1200,
     });
     console.log(
-      `[progression-coach] Haiku call returned in ${Date.now() - t0}ms (${raw.length} chars)`,
+      `[progression-coach] Haiku returned in ${Date.now() - t0}ms (${raw.length} chars): ${raw.slice(0, 120)}${raw.length > 120 ? "…" : ""}`,
     );
   } catch (err) {
     console.error("[progression-coach] Claude call failed:", err);
-    return NextResponse.json(
-      { coach: null, error: err instanceof Error ? err.message : String(err) },
-      { status: 200 },
-    );
+    const fallback = makeFallback(session.pain_pre, session.pain_post);
+    await writeCoachLog(body, fallback);
+    return NextResponse.json({ coach: fallback, fallback: true });
   }
 
   if (!raw.trim()) {
     console.error("[progression-coach] Claude returned empty response");
-    return NextResponse.json({ coach: null, error: "empty response" }, { status: 200 });
+    const fallback = makeFallback(session.pain_pre, session.pain_post);
+    await writeCoachLog(body, fallback);
+    return NextResponse.json({ coach: fallback, fallback: true });
   }
 
   const parsed = parseCoachOutput(raw);
   if (!parsed) {
-    console.error("[progression-coach] Unparseable coach output (first 500 chars):", raw.slice(0, 500));
-    return NextResponse.json({ coach: null, raw }, { status: 200 });
+    console.error(
+      "[progression-coach] Unparseable coach output (first 500 chars):",
+      raw.slice(0, 500),
+    );
+    // Last-ditch: wrap the raw text as the message so the user still sees
+    // SOMETHING on the summary screen.
+    const fallback: CoachOutput = {
+      message: raw.slice(0, 500).trim() || "Nice work today. Rest up and see you next time.",
+      next_steps: [],
+      resources: [],
+    };
+    await writeCoachLog(body, fallback);
+    return NextResponse.json({ coach: fallback, fallback: true, raw });
   }
 
+  await writeCoachLog(body, parsed);
+  return NextResponse.json({ coach: parsed });
+}
+
+async function writeCoachLog(body: Payload, coach: CoachOutput): Promise<void> {
   try {
-    await db.insert(narratorLog).values({
+    await getDb().insert(narratorLog).values({
       patient_id: body.patient_id,
       session_id: body.session_id,
       source: "coach",
       t_ms: 0,
-      reasoning_text: renderForLog(parsed),
+      reasoning_text: renderForLog(coach),
     });
   } catch (err) {
     console.error("[progression-coach] narrator_log insert failed:", err);
   }
+}
 
-  return NextResponse.json({ coach: parsed });
+function makeFallback(painPre: number | null, painPost: number | null): CoachOutput {
+  const painDelta =
+    painPre != null && painPost != null ? painPre - painPost : null;
+  const painLine =
+    painDelta == null
+      ? "You wrapped up today's session."
+      : painDelta > 0
+        ? `Pain dropped from ${painPre} to ${painPost} — solid.`
+        : painDelta === 0
+          ? "Pain held steady through the session."
+          : `Pain ticked up from ${painPre} to ${painPost} — something to note.`;
+  return {
+    message: `${painLine} Rest up, stay hydrated, and see you next time.`,
+    next_steps: ["Take it easy for a few hours.", "Come back for your next session on schedule."],
+    resources: [],
+  };
 }

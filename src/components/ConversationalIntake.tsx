@@ -264,39 +264,46 @@ export default function ConversationalIntake({
   if (status === "idle") {
     return (
       <div className="glass-card p-10 text-center animate-fade-in flex flex-col items-center gap-5">
-        {/* Mic icon */}
-        <div
-          className="w-20 h-20 rounded-full flex items-center justify-center"
-          style={{ background: "var(--color-accent-dim)", border: "1px solid var(--color-accent)" }}
+        {/* Mic — entire circle is clickable, with breathing pulse */}
+        <button
+          onClick={startConversation}
+          aria-label="Start voice intake"
+          className="relative w-24 h-24 rounded-full flex items-center justify-center transition-transform duration-200 hover:scale-105 active:scale-95"
+          style={{ background: "var(--color-accent-dim)", border: "1px solid var(--color-accent)", cursor: "pointer" }}
         >
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          {/* Breathing rings */}
+          <span
+            className="absolute inset-0 rounded-full animate-ping"
+            style={{ background: "var(--color-accent)", opacity: 0.15, animationDuration: "2.4s" }}
+          />
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{ boxShadow: "0 0 24px var(--color-accent-glow)" }}
+          />
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ position: "relative" }}>
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
             <line x1="12" y1="19" x2="12" y2="23" />
             <line x1="8" y1="23" x2="16" y2="23" />
           </svg>
-        </div>
+        </button>
 
         <div>
           <h2 className="text-lg font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
             Talk to Vero
           </h2>
           <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-            Answer a few quick questions by voice — takes about 60 seconds.
+            Speak naturally — Vero fills out the form for you.
           </p>
         </div>
 
         <button onClick={startConversation} className="btn-accent px-8">
-          Start Voice Intake
+          Start Voice Intake · ~60s
         </button>
 
-        <button
-          onClick={onFallbackToText}
-          className="text-xs transition-colors duration-200"
-          style={{ color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" }}
-        >
-          prefer text? → Type instead
-        </button>
+        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+          Or fill the form on the right →
+        </p>
       </div>
     );
   }

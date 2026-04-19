@@ -86,6 +86,14 @@ export async function saveSession(input: SaveSessionInput): Promise<{ id: string
   return asJson<{ id: string }>(res);
 }
 
+export async function deleteSession(id: string): Promise<void> {
+  const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error ?? "delete failed");
+  }
+}
+
 /**
  * Create an empty session row at workout start. Returns the row's UUID so
  * subsequent per-rep writes can reference it via session_id.

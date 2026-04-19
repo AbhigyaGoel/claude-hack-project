@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { BodyRegion } from "@/types/exercise";
 import type { DiagnosticResult } from "@/types/patient";
 import { speakNonBlocking, type PlaybackHandle } from "@/lib/elevenLabs";
@@ -22,13 +23,13 @@ interface Question {
   options?: string[];
 }
 
-const BODY_REGIONS: { value: BodyRegion; label: string; icon: string }[] = [
-  { value: "shoulder", label: "Shoulder", icon: "M12 4v4M8 8l8 0M8 8l-2 8M16 8l2 8" },
-  { value: "knee", label: "Knee", icon: "M12 4v8M12 12l-3 8M12 12l3 8" },
-  { value: "hip", label: "Hip", icon: "M8 6h8M8 6l-2 6h12l-2-6M8 12l-2 8M16 12l2 8" },
-  { value: "ankle", label: "Ankle", icon: "M12 4v12M12 16l-4 4M12 16l4 2" },
-  { value: "lumbar", label: "Lower Back", icon: "M12 4v16M8 8h8M8 12h8M8 16h8" },
-  { value: "cervical", label: "Neck", icon: "M12 8a4 4 0 100-8 4 4 0 000 8zM12 8v12" },
+const BODY_REGIONS: { value: BodyRegion; label: string }[] = [
+  { value: "cervical", label: "Neck" },
+  { value: "shoulder", label: "Shoulder" },
+  { value: "lumbar", label: "Lower Back" },
+  { value: "hip", label: "Hip" },
+  { value: "knee", label: "Knee" },
+  { value: "ankle", label: "Ankle" },
 ];
 
 const RED_FLAG_QUESTIONS: Question[] = [
@@ -58,6 +59,368 @@ const SAFETY_INTRO =
 const TRANSITION_MESSAGE = "Great, let's move on.";
 
 type IntakeStep = "region" | "red_flags" | "assessment" | "complete";
+
+/** Front-view anatomical silhouette with clickable region hot-spots.
+ *  Accepts optional `hoveredRegion` to highlight a body part from outside
+ *  (e.g. when the user hovers a named pill in the parent list).
+ */
+function BodySilhouette({
+  regions,
+  onSelect,
+  hoveredRegion: externalHover,
+  onHoverChange,
+}: {
+  regions: BodyRegion[];
+  onSelect: (region: BodyRegion) => void;
+  hoveredRegion?: BodyRegion | null;
+  onHoverChange?: (r: BodyRegion | null) => void;
+}) {
+  const [internalHover, setInternalHover] = useState<BodyRegion | null>(null);
+  const hovered = externalHover ?? internalHover;
+
+  const setHover = (r: BodyRegion | null) => {
+    setInternalHover(r);
+    onHoverChange?.(r);
+  };
+
+  const HOTSPOTS: Record<BodyRegion, { cx: number; cy: number; label: string }> = {
+    cervical: { cx: 110, cy: 76, label: "Neck" },
+    shoulder: { cx: 66, cy: 104, label: "Shoulder" },
+    lumbar: { cx: 110, cy: 240, label: "Lower Back" },
+    hip: { cx: 110, cy: 290, label: "Hip" },
+    knee: { cx: 88, cy: 408, label: "Knee" },
+    ankle: { cx: 88, cy: 502, label: "Ankle" },
+  };
+
+  // Anatomical highlight shapes — bilateral where applicable.
+  const HIGHLIGHTS: Record<BodyRegion, React.ReactNode> = {
+    cervical: <ellipse cx={110} cy={75} rx={11} ry={12} />,
+    shoulder: (
+      <>
+        <ellipse cx={70} cy={100} rx={15} ry={11} />
+        <ellipse cx={150} cy={100} rx={15} ry={11} />
+      </>
+    ),
+    lumbar: <ellipse cx={110} cy={235} rx={38} ry={20} />,
+    hip: <ellipse cx={110} cy={285} rx={42} ry={14} />,
+    knee: (
+      <>
+        <ellipse cx={88} cy={408} rx={16} ry={12} />
+        <ellipse cx={142} cy={408} rx={16} ry={12} />
+      </>
+    ),
+    ankle: (
+      <>
+        <ellipse cx={84} cy={500} rx={11} ry={10} />
+        <ellipse cx={136} cy={500} rx={11} ry={10} />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      viewBox="0 0 220 560"
+      className="h-80 w-auto"
+      role="img"
+      aria-label="Body diagram — tap a region"
+    >
+      <defs>
+        <linearGradient id="bodyGrad" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="var(--color-surface)" />
+          <stop offset="50%" stopColor="var(--color-surface-raised)" />
+          <stop offset="100%" stopColor="var(--color-surface)" />
+        </linearGradient>
+        <filter id="bodyShadow" x="-20%" y="-10%" width="140%" height="120%">
+          <feGaussianBlur stdDeviation="3" />
+        </filter>
+        <filter id="regionGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" />
+        </filter>
+      </defs>
+
+      {/* Soft drop shadow */}
+      <g opacity="0.35" filter="url(#bodyShadow)">
+        <ellipse cx="110" cy="540" rx="60" ry="6" fill="var(--color-accent)" opacity="0.2" />
+      </g>
+
+      <g
+        fill="url(#bodyGrad)"
+        stroke="var(--color-border-bright)"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      >
+        {/* Head */}
+        <ellipse cx="110" cy="42" rx="22" ry="26" />
+
+        {/* Neck */}
+        <path d="M 102 64 L 118 64 L 116 84 Q 110 88 104 84 Z" />
+
+        {/* Torso — sloping shoulders, ribcage, tapered waist, hips */}
+        <path
+          d="
+            M 70 96
+            Q 70 82 86 82
+            L 134 82
+            Q 150 82 150 96
+            C 156 116 158 140 156 168
+            C 154 195 152 220 148 248
+            C 146 262 146 274 148 286
+            L 72 286
+            C 74 274 74 262 72 248
+            C 68 220 66 195 64 168
+            C 62 140 64 116 70 96
+            Z
+          "
+        />
+
+        {/* Left arm — deltoid bulge, taper to wrist */}
+        <path
+          d="
+            M 70 100
+            C 58 108 50 132 46 168
+            C 42 200 42 232 44 256
+            C 45 264 56 264 58 256
+            C 60 232 62 200 66 170
+            C 70 140 76 120 82 108
+            Z
+          "
+        />
+
+        {/* Right arm — mirror */}
+        <path
+          d="
+            M 150 100
+            C 162 108 170 132 174 168
+            C 178 200 178 232 176 256
+            C 175 264 164 264 162 256
+            C 160 232 158 200 154 170
+            C 150 140 144 120 138 108
+            Z
+          "
+        />
+
+        {/* Left leg — thigh, knee, calf bulge, taper to ankle */}
+        <path
+          d="
+            M 76 286
+            L 108 286
+            C 106 326 102 376 98 416
+            C 96 444 92 476 90 506
+            C 90 514 80 514 78 506
+            C 76 476 72 444 70 416
+            C 68 376 70 326 76 286
+            Z
+          "
+        />
+
+        {/* Right leg — mirror */}
+        <path
+          d="
+            M 112 286
+            L 144 286
+            C 150 326 152 376 150 416
+            C 148 444 144 476 142 506
+            C 142 514 132 514 130 506
+            C 128 476 124 444 122 416
+            C 118 376 114 326 112 286
+            Z
+          "
+        />
+
+        {/* Left foot — heel + forefoot */}
+        <path d="M 76 506 C 64 510 60 522 78 522 L 92 522 C 92 514 90 510 90 506 Z" />
+
+        {/* Right foot — mirror */}
+        <path d="M 144 506 C 156 510 160 522 142 522 L 128 522 C 128 514 130 510 130 506 Z" />
+
+        {/* Subtle midline for body symmetry hint */}
+        <line
+          x1="110"
+          y1="92"
+          x2="110"
+          y2="282"
+          stroke="var(--color-border)"
+          strokeWidth="0.6"
+          strokeDasharray="2 4"
+          opacity="0.5"
+          fill="none"
+        />
+      </g>
+
+      {/* Region highlight — body part lights up when its hot-spot or pill is hovered */}
+      {hovered && (
+        <>
+          {/* Soft outer glow */}
+          <g
+            fill="var(--color-accent)"
+            opacity="0.45"
+            filter="url(#regionGlow)"
+            style={{ pointerEvents: "none" }}
+            className="animate-fade-in"
+          >
+            {HIGHLIGHTS[hovered]}
+          </g>
+          {/* Inner crisp tint */}
+          <g
+            fill="var(--color-accent)"
+            opacity="0.35"
+            stroke="var(--color-accent)"
+            strokeWidth="1"
+            style={{ pointerEvents: "none" }}
+            className="animate-fade-in"
+          >
+            {HIGHLIGHTS[hovered]}
+          </g>
+        </>
+      )}
+
+      {/* Hot-spots */}
+      {regions.map((r) => {
+        const spot = HOTSPOTS[r];
+        const isHovered = hovered === r;
+        return (
+          <g
+            key={r}
+            className="cursor-pointer"
+            onClick={() => onSelect(r)}
+            onMouseEnter={() => setHover(r)}
+            onMouseLeave={() => setHover(null)}
+          >
+            {/* Larger invisible hit target */}
+            <circle cx={spot.cx} cy={spot.cy} r="20" fill="transparent" />
+
+            {/* Pulse ring — visible on hover only */}
+            {isHovered && (
+              <circle
+                cx={spot.cx}
+                cy={spot.cy}
+                r="10"
+                fill="var(--color-accent)"
+                opacity="0.3"
+              >
+                <animate
+                  attributeName="r"
+                  values="8;16;8"
+                  dur="1.6s"
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="opacity"
+                  values="0.4;0.05;0.4"
+                  dur="1.6s"
+                  repeatCount="indefinite"
+                />
+              </circle>
+            )}
+
+            {/* Halo behind dot */}
+            <circle
+              cx={spot.cx}
+              cy={spot.cy}
+              r={isHovered ? 8 : 6}
+              fill="var(--color-accent)"
+              opacity={isHovered ? 0.25 : 0.18}
+              style={{ transition: "r 200ms ease, opacity 200ms ease" }}
+            />
+
+            {/* Solid dot */}
+            <circle
+              cx={spot.cx}
+              cy={spot.cy}
+              r={isHovered ? 5 : 3.8}
+              fill="var(--color-accent)"
+              stroke="var(--color-background)"
+              strokeWidth="1.4"
+              style={{ transition: "r 200ms ease" }}
+            />
+
+            {/* Label tooltip on hover */}
+            {isHovered && (
+              <g style={{ pointerEvents: "none" }}>
+                <rect
+                  x={spot.cx + 14}
+                  y={spot.cy - 12}
+                  width={spot.label.length * 6.8 + 12}
+                  height="22"
+                  rx="6"
+                  fill="var(--color-background)"
+                  stroke="var(--color-accent)"
+                  strokeWidth="1"
+                />
+                <text
+                  x={spot.cx + 20}
+                  y={spot.cy + 3}
+                  fontSize="11"
+                  fontWeight="500"
+                  fill="var(--color-accent)"
+                >
+                  {spot.label}
+                </text>
+              </g>
+            )}
+
+            <title>{spot.label}</title>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/** Region picker: body diagram + named pill list, with bidirectional hover sync. */
+function RegionPicker({ onSelect }: { onSelect: (region: BodyRegion) => void }) {
+  const [hovered, setHovered] = useState<BodyRegion | null>(null);
+
+  return (
+    <div className="animate-fade-in">
+      <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+        Where does it hurt?
+      </h2>
+      <p className="text-sm mb-5" style={{ color: "var(--color-text-muted)" }}>
+        Tap the body diagram or pick from the list.
+      </p>
+      <div className="grid grid-cols-[auto_1fr] gap-6 items-center">
+        <BodySilhouette
+          regions={BODY_REGIONS.map((r) => r.value)}
+          onSelect={onSelect}
+          hoveredRegion={hovered}
+          onHoverChange={setHovered}
+        />
+        <div className="grid grid-cols-1 gap-2 stagger-children">
+          {BODY_REGIONS.map((region) => {
+            const isActive = hovered === region.value;
+            return (
+              <button
+                key={region.value}
+                onClick={() => onSelect(region.value)}
+                onMouseEnter={() => setHovered(region.value)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => setHovered(region.value)}
+                onBlur={() => setHovered(null)}
+                className="px-4 py-2.5 rounded-lg text-left text-sm font-medium transition-all duration-200 flex items-center justify-between gap-3"
+                style={{
+                  background: isActive ? "var(--color-accent-glow)" : "var(--color-surface-raised)",
+                  border: `1px solid ${isActive ? "var(--color-accent)" : "var(--color-border)"}`,
+                  color: "var(--color-text-primary)",
+                  transform: isActive ? "translateX(2px)" : undefined,
+                }}
+              >
+                <span>{region.label}</span>
+                <span
+                  className="w-1.5 h-1.5 rounded-full transition-opacity duration-200"
+                  style={{
+                    background: "var(--color-accent)",
+                    opacity: isActive ? 1 : 0,
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Pulsing speaker icon shown while TTS is playing */
 function SpeakingIndicator() {
@@ -95,6 +458,7 @@ function SpeakingIndicator() {
 }
 
 export default function IntakeView({ onComplete, liveRegion, liveResponses, disableTTS = false }: IntakeViewProps) {
+  const router = useRouter();
   const [step, setStep] = useState<IntakeStep>("region");
   const [bodyRegion, setBodyRegion] = useState<BodyRegion | null>(null);
   const [responses, setResponses] = useState<Record<string, string>>({});
@@ -284,15 +648,35 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses, disa
           Your responses indicate potential red flags that require professional
           medical evaluation before beginning an exercise program.
         </p>
-        <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+        <p className="text-xs mb-6" style={{ color: "var(--color-text-muted)" }}>
           Please consult with a physician or physical therapist.
         </p>
+        <div className="flex gap-3 justify-center flex-wrap">
+          <button
+            onClick={() => {
+              setResponses({});
+              setBodyRegion(null);
+              setRedFlagDetected(false);
+              lastSpokenStepRef.current = null;
+              setStep("region");
+            }}
+            className="btn-ghost text-sm"
+          >
+            Start Over
+          </button>
+          <button
+            onClick={() => router.push("/")}
+            className="btn-accent text-sm"
+          >
+            Return Home
+          </button>
+        </div>
       </div>
     );
   }
 
   // Step progress
-  const steps = ["Region", "Safety", "Assessment"];
+  const steps = ["Where", "Red flags", "Movement"];
   const currentStepIndex = step === "region" ? 0 : step === "red_flags" ? 1 : 2;
 
   return (
@@ -346,49 +730,9 @@ export default function IntakeView({ onComplete, liveRegion, liveResponses, disa
       </div>
 
       {step === "region" && (
-        <div className="animate-fade-in">
-          <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
-            Where are you experiencing pain?
-          </h2>
-          <p className="text-sm mb-5" style={{ color: "var(--color-text-muted)" }}>
-            Select the primary area of discomfort.
-          </p>
-          <div className="grid grid-cols-2 gap-3 stagger-children">
-            {BODY_REGIONS.map((region) => (
-              <button
-                key={region.value}
-                onClick={() => handleRegionSelect(region.value)}
-                className="p-4 rounded-xl text-left transition-all duration-200 group"
-                style={{
-                  background: "var(--color-surface-raised)",
-                  border: "1px solid var(--color-border)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--color-border-bright)";
-                  e.currentTarget.style.background = "var(--color-accent-glow)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--color-border)";
-                  e.currentTarget.style.background = "var(--color-surface-raised)";
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center"
-                    style={{ background: "var(--color-accent-dim)" }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round">
-                      <path d={region.icon} />
-                    </svg>
-                  </div>
-                  <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
-                    {region.label}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <RegionPicker
+          onSelect={handleRegionSelect}
+        />
       )}
 
       {step === "red_flags" && (
