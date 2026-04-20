@@ -19,6 +19,7 @@
     "@11labs/client": "^0.2.0",
     "@anthropic-ai/sdk": "^0.88.0",
     "@mediapipe/tasks-vision": "^0.10.14",
+    "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.47.10",
     "d3": "^7.9.0",
     "drizzle-orm": "^0.45.2",

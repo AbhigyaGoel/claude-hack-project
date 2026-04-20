@@ -160,6 +160,20 @@ export default function SessionPage() {
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [currentAngle, setCurrentAngle] = useState(0);
   const [movementPhase, setMovementPhase] = useState<MovementPhase>("ready");
+  const [rageMode, setRageMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("vero_rage_mode") === "true";
+  });
+
+  const rageModeRef = useRef(rageMode);
+  function toggleRageMode() {
+    setRageMode((prev) => {
+      const next = !prev;
+      rageModeRef.current = next;
+      localStorage.setItem("vero_rage_mode", String(next));
+      return next;
+    });
+  }
 
   // Agent state
   const [narratorEntries, setNarratorEntries] = useState<{ id: string; text: string }[]>([]);
@@ -219,9 +233,8 @@ export default function SessionPage() {
           text,
           stability: 0.6,
           similarityBoost: 0.8,
-          // Bump speed so one-line cues land fast without running into the
-          // next rep. Range 0.7–1.2 per ElevenLabs docs.
           speed: 1.2,
+          rage: rageModeRef.current,
         }),
       });
       if (!res.ok) {
@@ -1030,6 +1043,19 @@ export default function SessionPage() {
           {plan && (
             <span className="text-xs font-mono" style={{ color: "var(--color-text-muted)" }}>{currentExerciseIndex + 1}/{plan.exercises.length}</span>
           )}
+          <button
+            type="button"
+            onClick={toggleRageMode}
+            title={rageMode ? "Rage mode ON — click to chill" : "Chill mode — click for rage"}
+            className="text-xs font-mono px-2 py-1 rounded transition-all duration-200"
+            style={{
+              background: rageMode ? "#7f1d1d" : "var(--color-surface)",
+              color: rageMode ? "#fca5a5" : "var(--color-text-muted)",
+              border: `1px solid ${rageMode ? "#ef4444" : "var(--color-border)"}`,
+            }}
+          >
+            {rageMode ? "😡 RAGE" : "😊 CHILL"}
+          </button>
         </div>
       </header>
 

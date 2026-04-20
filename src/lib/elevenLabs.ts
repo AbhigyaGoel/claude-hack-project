@@ -4,6 +4,7 @@ export interface TTSConfig {
   modelId: string;
   stability: number;
   similarityBoost: number;
+  rage?: boolean;
 }
 
 const DEFAULT_CONFIG: TTSConfig = {
@@ -17,13 +18,13 @@ export async function textToSpeech(
   text: string,
   config: Partial<TTSConfig> = {},
 ): Promise<ArrayBuffer> {
-  const { voiceId, stability, similarityBoost } = { ...DEFAULT_CONFIG, ...config };
+  const { voiceId, stability, similarityBoost, rage } = { ...DEFAULT_CONFIG, ...config };
 
   // Route through server-side proxy to keep the API key out of the browser
   const response = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, voiceId, stability, similarityBoost }),
+    body: JSON.stringify({ text, voiceId, stability, similarityBoost, rage }),
   });
 
   if (!response.ok) {

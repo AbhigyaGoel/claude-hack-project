@@ -16,7 +16,7 @@ Vero runs a complete physical therapy session end-to-end:
 
 2. **Exercise Programming**: Pulls from a 105-exercise library spanning 6 body regions (shoulder, knee, hip, lumbar, cervical, ankle), each with clinically accurate target angles, compensation pattern definitions with MediaPipe landmark indices, and progression/regression pathways.
 
-3. **Real-Time Form Analysis**: MediaPipe BlazePose tracks 33 keypoints at 30fps in-browser. A rep detection state machine counts reps using joint angle thresholds. Per-rep, Claude agents analyze form quality, detect compensations, and generate coaching feedback, all spoken aloud via ElevenLabs TTS.
+3. **Real-Time Form Analysis**: MediaPipe BlazePose tracks 33 keypoints at 30fps in-browser. A rep detection state machine counts reps using joint angle thresholds. Per-rep, a team of Claude agents analyze form quality, detect compensations, and generate coaching feedback, all spoken aloud via ElevenLabs TTS.
 
 4. **Multi-Agent Clinical Reasoning**: During exercise, a swarm of specialized agents runs in parallel:
    - **Form Observer** reads webcam frames and writes warm, plain-language chart notes (SOAP "O")
